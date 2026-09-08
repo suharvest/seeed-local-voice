@@ -268,7 +268,7 @@ COPY --from=rkvoice-wheel-builder /tmp/rkvoice-wheels/ /tmp/rkvoice-wheels/
 RUN pip install --no-cache-dir --no-deps /tmp/rkvoice-wheels/*.whl \
     && test "$(python3 -c 'from importlib.metadata import version; print(version("rkvoice-stream"))')" = "${RKVOICE_VERSION}" \
     && rm -rf /tmp/rkvoice-wheels
-ARG EN_CORE_MODEL_SHA256=075db178346c39942ad96b96bdfa391685274549cb9dfc52e7ce213b59aebb59
+ARG EN_CORE_MODEL_SHA256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
 RUN curl -fsSL https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl -o /tmp/en_core_web_sm.whl \
     && echo "${EN_CORE_MODEL_SHA256}  /tmp/en_core_web_sm.whl" | sha256sum -c - \
     && pip install --no-cache-dir --no-deps /tmp/en_core_web_sm.whl \

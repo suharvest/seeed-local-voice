@@ -28,7 +28,7 @@ staged model bundle. No image build or device rollout has been qualified yet.
 - published `voxedge==0.0.13a0`; if the release is absent
   from the configured mirror, publication must happen before image build.
 - official `en_core_web_sm` 3.8.0 wheel downloaded by Dockerfile with SHA256
-  `075db178346c39942ad96b96bdfa391685274549cb9dfc52e7ce213b59aebb59`.
+  `1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85`.
 - Frozen `server/`, `configs/`, `voices/`, `deploy/artifacts/` snapshots with
   dirty-source status and per-file hashes.
 - externally staged `deploy/rk-runtime/` library inventory and authenticated
