@@ -2,8 +2,13 @@
 
 Zero errors through c=48 on SenseVoice; p95 at c=48 is still under 800 ms but
 already more than double c=8's, so that is where degradation starts on this
-board. Whisper's admission ceiling is 1 concurrent session, enforced by the
-installed `voxedge` package itself, not by board resources — same as J3011.
+board. Whisper's admission ceiling was previously 1 (the installed
+`voxedge==0.0.13a0` package had no `max_concurrent` field on
+`WhisperASRConfig`); with a wheel built from `voxedge` `main` (466f3e4,
+unreleased) the ceiling now follows the profile, and the sweep below finds a
+serialized-decode-queue ceiling of 8 — above that, reproducibly shorter
+collected transcripts for the same audio, not just added latency — the
+same recommendation as J3011.
 
 ## SenseVoice (zh)
 
@@ -56,44 +61,83 @@ concurrency level.
 
 ## Whisper (en)
 
-Corpus: 20 (c=1) / 200 (c=4) LibriSpeech test-clean en utterances (CC BY 4.0).
-Same transport/deployment recipe, profile `orin-whisper-c64` (copy of the
-tracked `orin-whisper` profile with `asr_max_slots`/`max_concurrent_sessions`
-raised from 8 to 64), `OVS_MAX_CONCURRENT_SESSIONS=64`. The Whisper base
-encoder `.plan` was built fresh on first start (bf16, confirmed in the
-container log: "Building Whisper TRT encoder (host TRT 10.3.0, bf16)").
+**History:** as on J3011, every prior pass on this board clamped
+`effective_limit` to 1 because PyPI `voxedge==0.0.13a0` has no
+`max_concurrent` field on `WhisperASRConfig` (see the previous revision of
+this file, including a suspected session-release leak observed once at c=1
+before a restart, never reproduced). This run replaces it with a wheel built
+from `voxedge` `main` (466f3e4, merged, not yet released to PyPI), which
+adds the field. The sweep below is the first real Whisper concurrency data
+on this board.
 
-Server startup log: `whisper.tensorrt: admission ceiling 64 requested but
-this voxedge build has no max_concurrent field on WhisperASRConfig — staying
-at 1 slots`, then `SessionLimiter initialized: effective_limit=1`
-— the same hard package-level clamp seen on J3011, not board-specific.
+Corpus: 200 LibriSpeech test-clean en utterances (CC BY 4.0), round-robined
+per level with `--limit` set so every level keeps segments >= 3x its worker
+count. Same transport/deployment recipe as SenseVoice above and as J3011's
+Whisper section: image `v0.9.0-ondemand-20260721c`, `server/`+`configs/`
+bind-mounted from openvoicestream `main`, profile `orin-whisper-c64`,
+`OVS_MAX_CONCURRENT_SESSIONS=64`, `OVS_API_KEYS=testkey123` (bench run with
+`--api-key`), `PYTHONUTF8=1`, `LC_ALL=C.UTF-8`, `pip install
+<voxedge-main-wheel> sentencepiece kaldi_native_fbank` replacing the image's
+stock voxedge. The Whisper base encoder `.plan` was already cached on this
+board from a prior pass (bf16 TensorRT, confirmed via file timestamp/size,
+not rebuilt this run). Server confirmed at startup: `SessionLimiter
+initialized: effective_limit=64` and `ASR executor: max_workers=64
+(source=asr_cap.max_concurrent)` — both re-checked after every `docker
+restart` between levels below, not assumed from the first one. All non-ASR
+containers stopped before the run and restarted after, `docker ps`
+reconciled against the pre-test list.
 
-The first c=1 attempt on this board (before a container restart) hit 18/20
-`too_many_sessions` errors starting from the 3rd segment (`current: 1, limit:
-1` while the previous session's slot should already have been released) —
-looked like a session-release leak. The full per-segment result of that
-failed attempt is preserved at
-`orin-nx-whisper-c1-coldstart-failed-attempt.json` for independent
-inspection. A `docker restart` and re-run of the same c=1 sweep completed
-cleanly (20/20 OK, see the row below), so this was not reproduced on a
-second attempt; it is recorded here as an observed but unconfirmed
-intermittent failure mode on cold start, not a confirmed leak (needs more
-repeated cold-start attempts to say more).
+| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | RTF p50 | Throughput (seg/s) | WER |
+|---|---|---|---|---|---|---|---|---|
+| 1  | 20 | 20 | 0 | 429.9  | 750.7  | 0.057 | 0.11 | 3.62%  |
+| 4  | 24 | 24 | 0 | 492.7  | 694.5  | 0.062 | 0.43 | 4.41%  |
+| 8  | 40 | 40 | 0 | 499.9  | 1058.1 | 0.098 | 0.88 | 7.87%  |
+| 16 | 64 | 64 | 0 | 1769.6 | 5756.8 | 0.349 | 1.41 | 16.07% |
 
-| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | Throughput (seg/s) | WER |
-|---|---|---|---|---|---|---|---|
-| 1 | 20  | 20 | 0   | 326.5 | 641.2 | 0.11 | 3.62% |
-| 4 | 200 | 2  | 198 | -     | -     | 0.19 | -     |
+GR3D_FREQ peak 57%, RAM peak 3.99/15.66 GB (`orin-nx-ceiling-tegrastats.log`
+whole-sweep peaks, not per-level).
 
-At c=1 (post-restart, clean run) all 20 segments transcribe correctly (WER
-3.62%, matching J3011 and the project's known Whisper-base reference figure).
-At c=4, only the first session is admitted; the other three are rejected at
-the WebSocket layer with `{"error": "too_many_sessions", "current": 1,
-"limit": 1}` — 198/200 segments fail this way. **This board's real Whisper
-concurrency ceiling is 1**, identical to J3011 — c=8/16/24/32 were not run
-for the same reason: the failure mode is a hard admission clamp confirmed in
-the startup log, not a resource limit that more concurrency would probe
-differently.
+Zero errors at every level tested (c=24/32 were not run — see below). p95
+holds in a 0.69-1.06 s band through c=8, then jumps to 5.76 s at c=16 (5.4x
+c=8's) — the same serialized-CPU-KV-cache-decode queueing pattern as J3011;
+this board's larger GPU/CPU headroom does not move the onset meaningfully.
+
+**Accuracy is also confirmed to degrade under load on this board**, checked
+the same way as J3011: a follow-up c=1 run against the identical 64-item
+corpus subset used at c=16 (`docker restart` first, `effective_limit=64`
+reconfirmed).
+
+- **c=4 and c=8 show no per-item WER regression**: every item shared with
+  the c=1/64 baseline (24 items at c=4, 40 at c=8) scores the identical
+  `err` value it scored at c=1 — no item got worse at these levels.
+- **c=16 shows real, reproducible score changes**: 11 of the 64 shared items
+  score differently at c=16 than at c=1 for the same audio (not all worse —
+  same mixed pattern as J3011). Example (`en_pub_22`, ref "THEY WERE
+  CERTAINLY NO NEARER THE SOLUTION OF THEIR PROBLEM"): c=1 transcribes the
+  full sentence ("there were certainly no near the solution of their
+  problem.", `pre_eos_finals=1`) while c=16 for the identical segment
+  returns just `"there were certainly no"` (`pre_eos_finals=0`). A second
+  matched example, `en_pub_29`, shows the same pattern: a full two-sentence
+  transcript at c=1, cut after the first sentence at c=16. (A third
+  candidate, `en_pub_62`, only differs by a dropped "[BLANK_AUDIO]" tag at
+  c=16 — that removes a non-reference token and slightly improves WER, not
+  an instance of lost speech content, so it is not cited as a truncation
+  example.) What the client collects is a shorter transcript at higher
+  concurrency for the same audio on this board too — the same pattern as
+  J3011, though independently confirmed only via these two examples here
+  (J3011's write-up has the fuller matched-pair analysis and the caveat on
+  what the truncation mechanism is and isn't established to be).
+- The aggregate WER trend (3.62% at c=1 to 16.07% at c=16) is therefore a
+  mix of corpus composition (harder items entering at higher `--limit`,
+  which score identically regardless of concurrency at c=4/c=8) and the
+  score-regression pattern that appears at c=16, isolated by the
+  matched-item comparison above.
+
+**Recommended admission ceiling: 8** — the highest level tested with no
+observed per-item WER regression vs the c=1 baseline and p95 under the 1.5 s
+bar; c=16 shows both rising latency and the same matched-item transcript
+shortening seen on J3011, so c=24/c=32 were not run.
+
 
 ## Files
 

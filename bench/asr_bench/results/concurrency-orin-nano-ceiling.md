@@ -1,9 +1,14 @@
 # ASR concurrency ceiling — reComputer J3011 (Jetson Orin Nano 8GB Super)
 
 Zero errors through c=32 on SenseVoice, with p95 breaking down at c=48 — that is
-this board's ceiling for that backend. Whisper's admission ceiling is 1
-concurrent session, enforced by the installed `voxedge` package itself, not by
-board resources.
+this board's ceiling for that backend. Whisper's admission ceiling was
+previously 1 (the installed `voxedge==0.0.13a0` package had no
+`max_concurrent` field on `WhisperASRConfig`); with a wheel built from
+`voxedge` `main` (466f3e4, unreleased) the ceiling now follows the profile
+and the real bottleneck is a serialized decode queue that, above c=8,
+produces reproducibly shorter collected transcripts for the same audio
+(not just added latency) — recommended ceiling 8, see the Whisper section
+below.
 
 ## SenseVoice (zh)
 
@@ -62,37 +67,105 @@ subset).
 
 ## Whisper (en)
 
-Corpus: 20 (c=1) / 200 (c=4) LibriSpeech test-clean en utterances (CC BY 4.0).
-Same transport/deployment recipe, profile `orin-whisper-c64` (copy of the
-tracked `orin-whisper` profile with `asr_max_slots`/`max_concurrent_sessions`
-raised from 8 to 64), `OVS_MAX_CONCURRENT_SESSIONS=64`.
+**History:** the PyPI package `voxedge==0.0.13a0` has no `max_concurrent`
+field on `WhisperASRConfig`, so every prior pass on this board clamped
+`effective_limit` to 1 regardless of the profile's requested ceiling (see
+`concurrency-orin-nano-clean.md` and the previous revision of this file).
+This run replaces PyPI voxedge with a wheel built from `voxedge` `main`
+(466f3e4 `feat(asr): configurable admission ceilings for the whisper and
+sherpa backends` — merged, not yet released to PyPI), which adds the field
+and a matching `_lock`. That removes the artificial clamp; the sweep below
+shows what actually gates Whisper concurrency once it is removed: a
+serialized decode queue, not board resources exhausted or an error.
 
-Server startup log: `whisper.tensorrt: admission ceiling 64 requested but
-this voxedge build has no max_concurrent field on WhisperASRConfig — staying
-at 1 slots`, then `session_limiter: OVS_MAX_CONCURRENT_SESSIONS=64 exceeds
-backend ceiling (asr=1,tts=inf) -> clamping to 1`, and
-`SessionLimiter initialized: effective_limit=1`. This is a property of the
-installed `voxedge==0.0.13a0` package (confirmed the sole and latest
-available pre-release via `pip index versions voxedge --pre`, which lists
-0.0.13a0 down to 0.0.1a0 with nothing newer) — not a profile setting we can
-raise, and not board resource exhaustion.
+Corpus: 200 LibriSpeech test-clean en utterances (CC BY 4.0), round-robined
+per level with `--limit` set so every level keeps segments >= 3x its worker
+count (e.g. c=24 uses 72). Same transport/deployment recipe as SenseVoice
+above: image `v0.9.0-ondemand-20260721c`, `server/`+`configs/` bind-mounted
+from openvoicestream `main`, profile `orin-whisper-c64` (`asr_max_slots`/
+`max_concurrent_sessions` raised from 8 to 64), `OVS_MAX_CONCURRENT_SESSIONS=64`,
+`OVS_API_KEYS=testkey123` (bench run with `--api-key`), `PYTHONUTF8=1`,
+`LC_ALL=C.UTF-8`. `pip install <voxedge-main-wheel> sentencepiece
+kaldi_native_fbank` replaces the image's stock voxedge inside the container.
+The Whisper base encoder `.plan` was already cached on this board from a
+prior pass (bf16 TensorRT, confirmed via file timestamp/size, not rebuilt
+this run). Server confirmed at startup: `SessionLimiter initialized:
+effective_limit=64` and `ASR executor: max_workers=64
+(source=asr_cap.max_concurrent)` — both survive a `docker restart` between
+every level in the sweep below (checked explicitly after each restart, not
+assumed from the first one). All non-ASR containers stopped before the run
+and restarted after, `docker ps` reconciled against the pre-test list.
 
-| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | Throughput (seg/s) | WER |
-|---|---|---|---|---|---|---|---|
-| 1 | 20  | 20 | 0   | 500.3 | 738.5 | 0.11 | 3.62% |
-| 4 | 200 | 5  | 195 | -     | -     | 0.16 | -     |
+| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | RTF p50 | Throughput (seg/s) | WER |
+|---|---|---|---|---|---|---|---|---|
+| 1  | 20 | 20 | 0 | 595.3  | 1114.6 | 0.084 | 0.11 | 3.62%  |
+| 4  | 24 | 24 | 0 | 474.8  | 1119.7 | 0.072 | 0.42 | 4.41%  |
+| 8  | 40 | 40 | 0 | 680.7  | 1288.1 | 0.120 | 0.86 | 7.87%  |
+| 16 | 64 | 64 | 0 | 1819.3 | 3757.8 | 0.279 | 1.52 | 14.89% |
+| 24 | 72 | 72 | 0 | 4098.8 | 7008.6 | 0.708 | 1.82 | 25.92% |
 
-At c=1 all 20 segments transcribe correctly (WER 3.62%, matching the
-project's known Whisper-base reference figure). At c=4, only the first
-session is admitted; the other three are rejected at the WebSocket layer
-with `{"error": "too_many_sessions", "current": 1, "limit": 1}` — 195/200
-segments fail this way (the 5 that succeed are the sole admitted slot's
-share, processed sequentially as earlier callers finish and free the slot).
-**This board's real Whisper concurrency ceiling is 1** — c=8/16/24/32 were
-not run because the failure mode (a hard admission clamp, confirmed in the
-startup log) does not change with more attempted concurrency; running them
-would only reproduce the same near-total `too_many_sessions` rejection rate
-already shown at c=4, not new information about a resource limit.
+GR3D_FREQ peak 69%, RAM peak 3.03/7.62 GB (`orin-nano-ceiling-tegrastats.log`
+whole-sweep peaks, not per-level).
+
+Zero errors at every level tested (c=32 was not run — see below). p95 stays
+in a 1.1-1.3 s band through c=8, then more than doubles at c=16 (1.29 s ->
+3.76 s, 2.9x) and keeps climbing at c=24 (7.01 s) — the coordinator/executor
+serializes Whisper decode behind one CPU KV-cache path
+(`execution_policy.mode: concurrent` is declared but the backend still runs
+one decode at a time; see `voxedge/backends/whisper/asr.py`), so admission
+concurrency above the decode's real throughput turns into queueing, not
+parallel work.
+
+**Accuracy is also confirmed to degrade under load, not just latency** — this
+was checked directly with a same-item, varying-concurrency comparison (a
+follow-up c=1 run against the identical 72-item corpus subset used at c=24,
+`docker restart` first, `effective_limit=64` reconfirmed), not inferred from
+the aggregate WER trend alone:
+
+- **c=4 and c=8 show no per-item WER regression**: every item shared with
+  the c=1/72 baseline (24 items at c=4, 40 at c=8) scores the identical
+  `err` value it scored at c=1 — no item got worse at these levels. (Text
+  can still vary slightly at equal WER, e.g. `en_pub_35` drops a trailing
+  "air." at c=8 while scoring the same `err` because the reference word is
+  "PAIR." — so this is "no observed WER regression," not "byte-identical
+  transcripts.")
+- **c=16 and c=24 show real, reproducible score changes**: of the 64 items
+  shared with c=16, 9 score differently than at c=1 — 7 worse, 2 better
+  (`en_pub_31` improves 0.500 -> 0.375; `en_pub_62` improves 0.778 -> 0.667).
+  Several items at c=24 score sharply worse than their own c=1 transcript
+  for the *same audio*. Example (`en_pub_41`, ref "YET LITTLE AS IT WAS IT
+  HAD ALREADY MADE A VAST DIFFERENCE IN THE ASPECT OF THE ROOM"): c=1
+  transcribes it in full ("Yet little as it was it had arisen. already made
+  a vast difference in the aspect of the room.", `pre_eos_finals=3`) while
+  the c=24 run for the identical segment returns just `"Yet"`
+  (`pre_eos_finals=0`). Two more examples from the same comparison:
+  `en_pub_63` ("I had scarcely no what I had been saying or doing..." at
+  c=1 vs just "I had scarcely no" at c=24) and `en_pub_38` ("Oh, let him
+  come along she urged. I do love to see him about that old house." at c=1
+  vs just "Oh, let him" at c=24). What the client collects is a shorter
+  transcript at higher concurrency for the same audio — a real,
+  reproducible correctness regression, not corpus-composition and not
+  merely slower-but-correct decoding. The exact mechanism is **not**
+  confirmed: `bench.py` returns on the first `is_final` after the EOS
+  frame, so this rules out "same output, just slower" but cannot by itself
+  distinguish the backend actually truncating decode from a delayed/split
+  final message where later content was sent but not collected by this
+  client — that would need a message-level trace on the wire, not done
+  here.
+- The aggregate WER trend (3.62% at c=1 to 25.92% at c=24) is therefore a mix
+  of both effects: some of the rise from c=1 to c=8 is corpus composition
+  (larger `--limit` includes harder LibriSpeech items never tested at c=1,
+  and those items score identically regardless of concurrency), but the
+  jump at c=16/c=24 includes a real per-item score regression on top of that,
+  isolated by the matched-item comparison above.
+
+**Recommended admission ceiling: 8** — the highest level tested with no
+observed per-item WER regression vs the c=1 baseline and p95 under the 1.5 s
+bar; c=16 and above show both rising latency and a reproducible drop in
+matched-item transcript completeness. c=32 was not run since c=16/c=24 already
+established the ceiling has been passed by a wide margin on two independent
+measures.
+
 
 ## Files
 
