@@ -19,6 +19,21 @@ plus the seeed commit. Rebuild the wheel from the recorded voxedge commit
 | `jetson-jp62-trt103-edgellm-v091-vox080a0` | `976c140` | `voxedge==0.0.8a0` | 2026-08-08 | seeed-orin-nx | `sha256:ba5b9f359b8a370e9fbccc5a7200dec6c0a49eeabc9f152a55a79c310b7b24d0` |
 | `jetson-jp62-trt103-edgellm-v091-vox0011a0-20260818` | `13383c8` | `voxedge==0.0.11a0` | 2026-08-18 | spark | `sha256:2e3752dea4b9a7c3993229caa063e3746f48476d9b436eca6f35cdd4c3685070` |
 | `rk-20260903.10` | `2a3cabbfdc8507e6058ae85e09803e1442621b20` + receipt-bound overlays | `0.0.12a0+kokoro.20260903.1` | 2026-09-03 | RK3576/RK3588 | `sha256:fdc480da30610f46075f41a8bf95be5774427a98d3e77c69272cdec1226593c1` |
+| `rk-20260909` | `c34af54` + this branch's two `Dockerfile.rk` build fixes | `0.0.13a0` | 2026-09-09 | spark | `sha256:184e9336847a6a0c246c94b311b11d0379d4c90366b8ea0ad6afa0a688b91a58` |
+
+`rk-20260909` — `--target final-slim`, pushed to both
+`sensecraft-missionpack.seeed.cn/solution/openvoicestream:rk-20260909` and
+`.../seeed-local-voice:rk-20260909` (same digest, 992 MB). First RK image
+carrying `2815186`, which resolves both RK3576 and RK3588 to
+`sense-voice-encoder.<soc>.fp16-scaled.rknn`; every earlier RK tag still
+fetches the plain-fp16 RK3576 encoder. Verified in-container:
+
+```
+rk3576 -> sense-voice-encoder.rk3576.fp16-scaled.rknn | fp16-scaled: True
+rk3588 -> sense-voice-encoder.rk3588.fp16-scaled.rknn | fp16-scaled: True
+```
+
+On-device accuracy has not been re-measured on this tag.
 
 **当前默认**：`docker-compose.edgellm-v091-voice.yml` 的 `SPEECH_IMAGE` 缺省值是
 `...-vox080a0`（在 slim2 基础上换 voxedge 0.0.8a0 + 老 profile 的
