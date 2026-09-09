@@ -101,12 +101,15 @@ Latency = audio-end → `is_final`; RTF = that latency / audio duration.
 | 4 | 20/20 | 0 | 620.1 | 865.7 | 0.105 | 0.117 | 0.58 | 5.48% |
 | 8 | 20/20 | 0 | 851.5 | 2280.2 | 0.125 | 0.274 | 1.00 | 5.48% |
 
-`results/harvest-pi-sensevoice-zh-stream.{json,md}`. Throughput scales 1:2:4:8
-across the four levels (0.15 → 1.00 seg/s) with p50 latency flat through c=4;
-at c=8 — twice the core count — p50 rises 37% and p95 2.7x, which is queueing
-in the ONNX Runtime thread pool, not rejection: no level returned an error.
-CER is identical at every level, as expected from a deterministic model on a
-fixed corpus.
+`results/harvest-pi-sensevoice-zh-stream.{json,md}`. Throughput rises with
+concurrency but sublinearly: 0.152 / 0.302 / 0.578 / 1.000 seg/s, i.e. x1.00,
+x1.98, x3.80, x6.57 against c=1. p50 latency is flat through c=4; at c=8 —
+twice the core count — p50 rises 33% and p95 2.7x while every request still
+completes: the extra time is waiting, not rejection — no level returned an
+error. The benchmark does not identify where inside the stack that wait
+happens. CER is
+identical at every level, as expected from a deterministic model on a fixed
+corpus.
 
 `top -b -d 1` sampled through the sweep (`harvest-pi-top.log`, 251 samples).
 The server process peaked at **336% CPU** of the board's 400% during the c=8
@@ -157,9 +160,10 @@ holds sample size constant (n=20 or n=4 per level).
 
 ### Pass 2 — `execution_policy.mode` re-check: profile pin loosened
 
-Per `configs/profiles/rpi5-sensevoice.json`'s own description
-("`max_concurrent_sessions` is pinned to 1... the declared ceiling is not
-safe here until it is measured") and `execution_policy.mode: "concurrent"`
+Per the `configs/profiles/rpi5-sensevoice.json` description **as it read at
+the time** ("`max_concurrent_sessions` is pinned to 1... the declared ceiling
+is not safe here until it is measured"; the current description says
+something else) and `execution_policy.mode: "concurrent"`
 (not `serialized` — this is a defensive software cap, not a hardware
 exclusivity lock like the RK NPU or Hailo device), the container was
 restarted with `OVS_MAX_CONCURRENT_SESSIONS=8`. The session limiter clamped
@@ -194,13 +198,19 @@ is consistent with normal item-to-item variance in this corpus rather than
 a concurrency-driven accuracy loss, but the sample is too small to rule
 that out.
 
-**Conclusion for SenseVoice on this device**: concurrency 1 is the safe
-default (server-pinned); concurrency up to 4 works with linear latency
-degradation and no accuracy loss if `OVS_MAX_CONCURRENT_SESSIONS` is raised;
-concurrency 8 is rejected by the backend's own declared ceiling, not by a
-hardware limit — this is a software policy question (how much CPU
-contention is acceptable), not a "does not support concurrency" hard
-failure like the RK3576 NPU or Hailo device exclusivity cases.
+**Conclusion drawn at the time, under the then-current configuration**
+(`max_concurrent_sessions=1`, backend ceiling 4): concurrency 1 was the
+server-pinned default; up to 4 worked with linear latency degradation and no
+accuracy loss once `OVS_MAX_CONCURRENT_SESSIONS` was raised; 8 was rejected by
+the backend's declared ceiling, not by a hardware limit — a software policy
+question, not a "does not support concurrency" failure like the RK3576 NPU or
+Hailo device exclusivity cases.
+
+**Superseded.** The profile now declares `max_concurrent_sessions=8` /
+`asr_max_slots=8`, and the `/asr/stream` sweep above completes 20/20 at c=8
+with no rejections. The latency figures in this section are also not
+comparable with the streaming ones: they were taken through a different
+endpoint and a different admission setting.
 
 ## Resource sampling
 
