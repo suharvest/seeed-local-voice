@@ -18,7 +18,7 @@
         "n": 100,
         "wer_prefix_pr96": 0.0459,
         "wer_postfix": 0.0413,
-        "delta_pp": -0.46
+        "delta_pp": -0.45
       },
       "le_10.08s_one_pass": {
         "n": 82,

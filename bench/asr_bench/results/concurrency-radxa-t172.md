@@ -30,21 +30,27 @@ zh (no segment above 10.08 s, so the windowing fix cannot move this number):
 | 1 | 100/0 | 632.9 | 1105.6 | 0.0474 |
 
 en, split by duration bucket. Two back-to-back c=1 runs each had 4/100
-segments fail with a client-side WebSocket error (`timed out during opening
-handshake` in run 1, `no close frame received or sent` in run 2) — different
-segment ids each time, none of them repeating, so this reads as Mac<->radxa
-Tailscale link flakiness rather than a server-side or decode fault. The two
-runs' successful ids are disjoint-complementary (each run's 4 failures are
-all in the other run's 96 successes), so the results below merge to a clean
-100/100 by taking, for each segment id, whichever run succeeded on it
+segments fail on the client side: run 1 failed `en_pub_96`/`en_pub_97` (no
+error text recorded) and `en_pub_98`/`en_pub_99` (`timed out during opening
+handshake`); run 2 failed `en_pub_01`-`en_pub_04` (`no close frame received
+or sent`). The two failure sets don't overlap and neither repeats a segment
+id, but the client-side error strings alone don't establish Mac<->radxa
+network flakiness versus some other client-side cause — recorded as
+undetermined. The two runs' *failure* ids are disjoint (run 1's 4 failures
+are all present in run 2's 96 successes and vice versa), so merging by
+segment id — for each of the 100 ids, taking whichever run has an `ok`
+record — yields all 100 unique ids with a real result (92 ids succeeded in
+both runs with identical transcripts/scores; 8 ids succeeded in only one of
+the two), not a rerun of a single clean pass
 (`results/radxa-t172-postfix-en.json` + `-en-retry.json` ->
-`radxa-t172-postfix-en-merged100.json`). WER is the mean of per-utterance
-`jiwer.wer` (matches `bench.py`'s own `error_rate_mean` methodology, verified
-against the zh CER above matching PR #96's number exactly).
+`radxa-t172-postfix-en-merged100.json`, 100 records). WER is the mean of
+per-utterance `jiwer.wer` (matches `bench.py`'s own `error_rate_mean`
+methodology, verified against the zh CER above matching PR #96's number
+exactly).
 
 | bucket | n | pre-fix (PR #96) | post-fix (c972711) | delta |
 |---|---|---|---|---|
-| all | 100 | 0.0459 | 0.0413 | -0.46 pp |
+| all | 100 | 0.0459 | 0.0413 | -0.45 pp |
 | <= 10.08 s (one pass) | 82 | 0.0412 | 0.0412 | 0.00 pp |
 | > 10.08 s (windowed) | 18 | 0.0669 | 0.0418 | -2.51 pp |
 
@@ -55,9 +61,16 @@ down from the pre-fix +2.89 pp). The single-pass bucket is unchanged at 0.00
 pp against pre-fix, as expected — the three c972711 fixes only touch the
 cross-window decode path.
 
-Server startup log confirms the merged backend was in effect:
-`SenseVoice RKNN worker pool: 3 context(s) on NPU_CORE_0, NPU_CORE_1,
-NPU_CORE_2 (platform=rk3588, T_FIXED=172, max 10.1s audio per encoder pass)`.
+The server startup log confirms `T_FIXED=172` (the intended config, not
+proof of the exact commit — that log line is unchanged since before
+`c972711`): `SenseVoice RKNN worker pool: 3 context(s) on NPU_CORE_0,
+NPU_CORE_1, NPU_CORE_2 (platform=rk3588, T_FIXED=172, max 10.1s audio per
+encoder pass)`. The revision itself is pinned by bind-mounting
+`/home/radxa/asrpar/stagea/sensevoice_rknn_merged.py` (md5
+`fa7d8d5fe5e48220b3e5b8bf830c40b0`) over the image's copy — that file was
+written via `git show origin/main:rkvoice_stream/backends/asr/sensevoice_rknn.py`
+from rkvoice-stream after PR #6 merged (HEAD `9d18ab35`, which is
+`c972711` squashed).
 
 Raw data: `results/radxa-t172-postfix-zh.json`,
 `results/radxa-t172-postfix-en.json`, `results/radxa-t172-postfix-en-retry.json`,
