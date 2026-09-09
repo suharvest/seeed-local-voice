@@ -47,13 +47,18 @@ level).
 Zero errors through every level tested, including c=48. p95 stays in a
 150-300 ms band through c=32, then jumps to 2.93 s at c=48 (p50 also jumps,
 139->768 ms) — more than 10x the c=8 p95 with no error and no swap growth.
-That is the ceiling for this board and backend: requests still complete
-correctly, but queueing delay (single serialized TensorRT execution context)
-dominates once concurrency exceeds ~32. **Recommended admission ceiling: 32**
-(p95 <= 1.5 s; 48 exceeds it 2x over). CER is unchanged at 5.83% at every
-concurrency level (this corpus/board's offline CER; not comparable to the
-5.99% figure in `concurrency-orin-nano-clean.md`, computed on a different
-20-segment corpus subset).
+Only c=32 and c=48 bracket this transition, so the exact breaking point
+between them is not established; a serialized single TensorRT execution
+context queueing more requests is the plausible mechanism (matching
+`jetson-sensevoice`'s documented design — see `execution_policy.mode:
+serialized`), but no per-request queue-time breakdown was captured to
+confirm that's the whole story. **Recommended admission ceiling: 32** — the
+highest tested level whose p95 stays under the 1.5 s bar; this is a
+"highest level that passed," not a claim that 32 is this board's exact
+hardware ceiling. CER is unchanged at 5.83% at every concurrency level (this
+corpus/board's offline CER; not comparable to the 5.99% figure in
+`concurrency-orin-nano-clean.md`, computed on a different 20-segment corpus
+subset).
 
 ## Whisper (en)
 

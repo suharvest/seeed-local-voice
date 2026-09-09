@@ -71,8 +71,11 @@ at 1 slots`, then `SessionLimiter initialized: effective_limit=1`
 The first c=1 attempt on this board (before a container restart) hit 18/20
 `too_many_sessions` errors starting from the 3rd segment (`current: 1, limit:
 1` while the previous session's slot should already have been released) —
-looked like a session-release leak. A `docker restart` and re-run of the same
-c=1 sweep completed cleanly (20/20 OK), so this was not reproduced on a
+looked like a session-release leak. The full per-segment result of that
+failed attempt is preserved at
+`orin-nx-whisper-c1-coldstart-failed-attempt.json` for independent
+inspection. A `docker restart` and re-run of the same c=1 sweep completed
+cleanly (20/20 OK, see the row below), so this was not reproduced on a
 second attempt; it is recorded here as an observed but unconfirmed
 intermittent failure mode on cold start, not a confirmed leak (needs more
 repeated cold-start attempts to say more).
@@ -98,3 +101,6 @@ differently.
   sections (`sensevoice_zh`, `whisper_en`).
 - `orin-nx-ceiling-tegrastats.log` — 1 Hz `tegrastats` samples spanning the
   SenseVoice sweep.
+- `orin-nx-whisper-c1-coldstart-failed-attempt.json` — the failed first c=1
+  cold-start attempt (18/20 `too_many_sessions`), preserved for independent
+  inspection of the unconfirmed leak-like symptom described above.
