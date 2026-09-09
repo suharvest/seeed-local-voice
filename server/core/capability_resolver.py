@@ -270,6 +270,25 @@ def _parse_positive_int(value, *, label: str) -> Optional[int]:
     return n
 
 
+def _parse_non_negative_int(value, *, label: str) -> Optional[int]:
+    """Like ``_parse_positive_int`` but admits 0."""
+    if value is None:
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        n = value
+    else:
+        s = str(value).strip()
+        if s == "":
+            return None
+        try:
+            n = int(s)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be an integer, got {value!r}") from exc
+    if n < 0:
+        raise ValueError(f"{label} must be >= 0, got {n}")
+    return n
+
+
 def resolve(
     *,
     profile: Mapping[str, object] | None,
@@ -525,7 +544,9 @@ def resolve(
         asr_queue_depth: Optional[int] = None
     else:
         asr_queue_depth = max(0, session_ceiling - asr_infer_concurrency)
-    env_depth = _parse_positive_int(
+    # Non-negative, not positive: 0 is a meaningful setting here — "never
+    # queue, reject the moment the runtime is busy".
+    env_depth = _parse_non_negative_int(
         env_map.get("OVS_ASR_INFER_QUEUE_DEPTH"),
         label="OVS_ASR_INFER_QUEUE_DEPTH",
     )

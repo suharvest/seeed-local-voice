@@ -392,3 +392,111 @@ def test_exclusive_mode_keeps_connection_level_locking():
         )
     )
     assert main_mod._asr_sentence_level_locking is False
+
+
+# ── codex review follow-ups ────────────────────────────────────────────
+
+
+@_asynctest
+async def test_cancellation_does_not_release_the_slot_under_a_live_worker():
+    """run_in_executor cannot cancel a running thread.
+
+    Cancelling the handler must not hand the shared runtime to the next
+    session while a worker is still inside the backend. Regression for the
+    codex MUST-FIX.
+    """
+    init_asr_inference_gate(concurrency=1, max_waiting=None)
+    probe = InferenceProbe()
+    entered = asyncio.Event()
+
+    class SlowStream(FakeOfflineStream):
+        def finalize(self):
+            self._probe.enter()
+            try:
+                entered._loop.call_soon_threadsafe(entered.set)
+                time.sleep(0.3)
+                return f"utterance-from-{self.session}", None
+            finally:
+                self._probe.leave()
+
+    class SlowBackend(FakeBackend):
+        def create_stream(self, language: str = "auto"):
+            s = SlowStream(self.session, self._probe, self._dwell)
+            self.streams.append(s)
+            return s
+
+    entered._loop = asyncio.get_running_loop()
+
+    victim = asyncio.ensure_future(main_mod._asr_stream_backend(
+        FakeWS([{"bytes": _CHUNK}] * 6), SlowBackend("victim", probe),
+        language="auto", sample_rate=_SR,
+        vad_session=FakeVAD(every=2), per_utterance_slot=True,
+    ))
+    await asyncio.wait_for(entered.wait(), timeout=5.0)
+    victim.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await victim
+
+    # The cancelled handler must not have returned before the worker left the
+    # backend; if it had, the gate would already be free with inflight > 0.
+    assert probe.inflight == 0, (
+        "slot released while an executor worker was still inside the backend"
+    )
+
+
+@_asynctest
+async def test_end_utterance_busy_rearms_the_stream():
+    """A rejected explicit end_utterance must not leave its audio behind.
+
+    Without the re-arm the rejected utterance stays in the stream and in the
+    speaker buffer, and the next successful final splices two utterances.
+    """
+    init_asr_inference_gate(concurrency=1, max_waiting=0)
+    probe = InferenceProbe()
+    eou = {"text": '{"command": "end_utterance"}'}
+
+    async def session(name: str):
+        ws = FakeWS([{"bytes": _CHUNK}, eou] * 3)
+        backend = FakeBackend(name, probe, dwell=0.05)
+        await main_mod._asr_stream_backend(
+            ws, backend, language="auto", sample_rate=_SR,
+            per_utterance_slot=True,
+        )
+        return backend, ws
+
+    results = await asyncio.gather(*(session(f"s{i}") for i in range(3)))
+    busy_total = sum(len(_busy(ws)) for _, ws in results)
+    assert busy_total > 0, "no backpressure on the end_utterance path"
+    for backend, ws in results:
+        for b in _busy(ws):
+            assert b["endpoint"] == "end_utterance"
+        # The success path for an explicit end_utterance deliberately keeps
+        # its stream (pre-existing behaviour); only the rejection path re-arms.
+        assert len(backend.streams) == len(_busy(ws)) + 1, (
+            "a rejected end_utterance did not re-arm the stream"
+        )
+    assert probe.peak == 1
+
+
+def test_lowered_infer_concurrency_engages_the_gate_on_a_parallel_backend():
+    """An operator narrowing in-flight inference must actually get the queue."""
+    cap = ConcurrencyCapability(supports_parallel=True, max_concurrent=4)
+    resolved = ResolvedCapability(
+        session_ceiling=4,
+        executor_max_workers=1,
+        coordinator_mode="concurrent",
+        ceiling_source="test",
+        asr_cap=cap,
+        tts_cap=ConcurrencyCapability.default(),
+        asr_infer_concurrency=1,   # OVS_ASR_INFER_CONCURRENCY=1
+        asr_queue_depth=3,
+    )
+    main_mod._set_asr_sentence_level_locking(resolved)
+    assert main_mod._asr_sentence_level_locking is True
+
+
+def test_uncapped_parallel_backend_still_stays_connection_level():
+    main_mod._set_asr_sentence_level_locking(
+        _resolved(ConcurrencyCapability(supports_parallel=True, max_concurrent=None))
+    )
+    assert main_mod._asr_sentence_level_locking is False

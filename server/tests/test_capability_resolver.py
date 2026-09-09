@@ -627,3 +627,20 @@ def test_operator_session_clamp_shrinks_the_queue_with_it():
     )
     assert r.session_ceiling == 2
     assert r.asr_queue_depth == 1
+
+
+def test_queue_depth_zero_is_configurable():
+    """0 means "never queue" and must be accepted, not rejected as non-positive."""
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=False, max_concurrent=4),
+        env={"OVS_ASR_INFER_QUEUE_DEPTH": "0"},
+    )
+    assert r.asr_queue_depth == 0
+
+
+def test_queue_depth_negative_rejected():
+    with pytest.raises(ValueError):
+        _cap_resolve(
+            ConcurrencyCapability(supports_parallel=False, max_concurrent=4),
+            env={"OVS_ASR_INFER_QUEUE_DEPTH": "-1"},
+        )

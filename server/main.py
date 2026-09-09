@@ -5408,17 +5408,18 @@ def _set_asr_sentence_level_locking(resolved) -> None:
         # opposite modality. Re-acquiring per utterance would thrash
         # unload/preload on every sentence, so keep the connection-level hold.
         _asr_sentence_level_locking = False
-    elif cap.supports_parallel:
-        # Inference is already parallel — a queue in front of it would only
-        # add latency. This also covers the "no ASR backend declared" case,
-        # which resolves to a parallel, uncapped placeholder.
-        _asr_sentence_level_locking = False
+    elif cap.max_concurrent is None:
+        # No fixed session cap. Only meaningful to gate when inference is
+        # serial; a parallel, uncapped backend (which is also what "no ASR
+        # backend declared" resolves to) has nothing to queue behind.
+        _asr_sentence_level_locking = not cap.supports_parallel
     else:
-        # Serial inference. Sentence-level locking is what makes admitting
-        # more than one session meaningful; ``None`` means the backend put no
-        # fixed cap on sessions at all.
+        # Gate whenever we admit more sessions than may be inside the runtime.
+        # Keyed on the RESOLVED in-flight limit, not on supports_parallel, so
+        # an operator lowering OVS_ASR_INFER_CONCURRENCY below the session
+        # count actually gets the queue rather than being silently ignored.
         _asr_sentence_level_locking = (
-            cap.max_concurrent is None or cap.max_concurrent > 1
+            cap.max_concurrent > resolved.asr_infer_concurrency
         )
     logger.info(
         "ASR locking granularity: %s (asr sessions=%s, in-flight=%s, "
@@ -5429,6 +5430,53 @@ def _set_asr_sentence_level_locking(resolved) -> None:
         resolved.asr_queue_depth,
         resolved.coordinator_mode,
     )
+
+
+class _AsrSlotJobs:
+    """Executor futures started inside one utterance slot.
+
+    ``run_in_executor`` cannot cancel a thread that has already started. If the
+    handler task is cancelled (server shutdown, backend drain) the ``await``
+    raises at once while the worker is still inside the backend. Releasing the
+    inference slot there would hand the shared runtime to the next session on
+    top of a live inference. Recording the futures here lets the slot wait for
+    the worker before it releases.
+    """
+
+    __slots__ = ("futures",)
+
+    def __init__(self) -> None:
+        # concurrent.futures.Future, deliberately NOT the asyncio wrapper.
+        # Cancelling the awaiting coroutine marks the asyncio future CANCELLED
+        # even when the thread could not be stopped, so the wrapper reports
+        # done() while the worker is still running — it cannot tell us when the
+        # backend is free. The thread-pool future can.
+        self.futures: list = []
+
+    async def run(self, fn, *args):
+        cf = _get_asr_executor().submit(fn, *args)
+        self.futures.append(cf)
+        return await asyncio.wrap_future(cf)
+
+    async def drain(self) -> None:
+        pending = [f for f in self.futures if not f.done()]
+        self.futures.clear()
+        if not pending:
+            return
+        pending = [asyncio.wrap_future(cf) for cf in pending]
+        # ``shield`` keeps the wait itself from being cancelled again. Best
+        # effort: if the caller is cancelled a second time we re-raise rather
+        # than hang, which is the shutdown path where a second inference no
+        # longer matters.
+        try:
+            await asyncio.shield(
+                asyncio.gather(*pending, return_exceptions=True)
+            )
+        except asyncio.CancelledError:
+            logger.warning(
+                "ASR slot: cancelled while waiting for an in-flight inference "
+                "to finish; releasing the slot with a worker still running"
+            )
 
 
 async def _send_asr_busy(ws, reason: str) -> None:
@@ -5450,13 +5498,21 @@ async def _send_asr_busy(ws, reason: str) -> None:
 
 
 @asynccontextmanager
-async def _asr_no_slot():
-    """No-op slot: the caller already holds the connection-level lock."""
-    yield 0.0
+async def _asr_no_slot(jobs: "_AsrSlotJobs"):
+    """No-op slot: the caller already holds the connection-level lock.
+
+    Still drains ``jobs``, so a cancelled handler does not return to the
+    caller — which then releases the connection-level lock — while a worker
+    thread is still inside the backend.
+    """
+    try:
+        yield 0.0
+    finally:
+        await jobs.drain()
 
 
 @asynccontextmanager
-async def _asr_utterance_slot():
+async def _asr_utterance_slot(jobs: "_AsrSlotJobs"):
     """Hold the ASR execution slot for exactly one utterance's inference.
 
     Gate first (bounded, rejects with ``InferenceQueueFull`` when the backlog
@@ -5470,7 +5526,12 @@ async def _asr_utterance_slot():
 
     async with get_asr_inference_gate().acquire() as waited:
         async with get_coordinator().acquire("asr"):
-            yield waited
+            try:
+                yield waited
+            finally:
+                # Release only once the executor worker has actually left the
+                # backend — see _AsrSlotJobs.
+                await jobs.drain()
 
 
 async def _asr_stream_backend(
@@ -5506,7 +5567,12 @@ async def _asr_stream_backend(
     # inference gate) for the duration of that one utterance's inference. When
     # False the caller holds the slot for the whole connection and the slot
     # context manager here is a no-op — identical to the pre-change code path.
-    _slot = _asr_utterance_slot if per_utterance_slot else _asr_no_slot
+    _slot_cm = _asr_utterance_slot if per_utterance_slot else _asr_no_slot
+
+    def _slot():
+        """One utterance's slot, with a fresh executor-job tracker."""
+        jobs = _AsrSlotJobs()
+        return _slot_cm(jobs), jobs
 
     stream = asr_be.create_stream(language=language)
     logger.info("ASR stream opened (backend=%s)", asr_be.name)
@@ -5568,17 +5634,36 @@ async def _asr_stream_backend(
                 elif cmd.get("command") == "end_utterance" or (cmd.get("type") or "").lower() == "eou":
                     _loop = asyncio.get_event_loop()
                     force_endpoint = getattr(stream, "force_endpoint", None)
+                    _cm, _jobs = _slot()
                     try:
-                        async with _slot():
+                        async with _cm:
                             if force_endpoint is not None:
-                                final_text = await _loop.run_in_executor(_get_asr_executor(), force_endpoint)
+                                final_text = await _jobs.run(force_endpoint)
                                 detected_language = None
                             else:
-                                await _loop.run_in_executor(_get_asr_executor(), stream.prepare_finalize)
-                                raw_final = await _loop.run_in_executor(_get_asr_executor(), stream.finalize)
+                                await _jobs.run(stream.prepare_finalize)
+                                raw_final = await _jobs.run(stream.finalize)
                                 final_text, detected_language = _unpack_finalize_result(raw_final)
                     except InferenceQueueFull:
+                        # Same cleanup as the VAD rejection path: without it the
+                        # rejected audio stays in the stream and in _seg, and
+                        # the next successful final would splice two utterances
+                        # together (and the buffer would keep growing under
+                        # sustained overload).
                         await _send_asr_busy(ws, "end_utterance")
+                        try:
+                            _old_close = getattr(stream, "close", None)
+                            if _old_close is not None:
+                                _old_close()
+                        except Exception:
+                            logger.exception("ASR busy re-arm: stream close raised")
+                        stream = asr_be.create_stream(language=language)
+                        _seg.clear()
+                        if vad_session is not None:
+                            try:
+                                vad_session.reset()
+                            except Exception:
+                                logger.debug("VAD reset after busy raised", exc_info=True)
                         continue
                     payload = {
                         "type": "final",
@@ -5616,10 +5701,11 @@ async def _asr_stream_backend(
             if len(data) == 0:
                 # End of audio — pre-encode tail, then decode
                 _loop = asyncio.get_event_loop()
+                _cm, _jobs = _slot()
                 try:
-                    async with _slot():
-                        await _loop.run_in_executor(_get_asr_executor(), stream.prepare_finalize)
-                        raw_final = await _loop.run_in_executor(_get_asr_executor(), stream.finalize)
+                    async with _cm:
+                        await _jobs.run(stream.prepare_finalize)
+                        raw_final = await _jobs.run(stream.finalize)
                 except InferenceQueueFull:
                     await _send_asr_busy(ws, "eos")
                     break
@@ -5665,10 +5751,11 @@ async def _asr_stream_backend(
                     # Emit vad_endpoint BEFORE finalize so the client can split
                     # VAD silence-wait from ASR compute time.
                     await ws.send_json({"type": "vad_endpoint"})
+                    _cm, _jobs = _slot()
                     try:
-                        async with _slot():
-                            await _loop.run_in_executor(_get_asr_executor(), stream.prepare_finalize)
-                            raw_final = await _loop.run_in_executor(_get_asr_executor(), stream.finalize)
+                        async with _cm:
+                            await _jobs.run(stream.prepare_finalize)
+                            raw_final = await _jobs.run(stream.finalize)
                     except InferenceQueueFull:
                         # Backlog full: drop this utterance rather than grow an
                         # unbounded queue. Re-arm the stream/VAD exactly as the
