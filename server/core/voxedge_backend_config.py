@@ -52,6 +52,66 @@ def _profile_get(profile: Optional[dict], *keys, default=None):
     return default
 
 
+def _resolve_asr_slots(
+    env_var: str,
+    default: int,
+    profile: Optional[dict] = None,
+    env: Optional[dict] = None,
+) -> int:
+    """Resolve an ASR admission ceiling: env → profile ``asr_max_slots`` → default.
+
+    The same three-step chain the paraformer and SenseVoice builders already
+    used, factored out because whisper and sherpa now need it too. A profile
+    may state it top-level (``asr_max_slots``) or inside its ``asr`` block
+    (``asr_max_slots`` / ``max_concurrent``). Unparseable values fall back to
+    ``default`` rather than raising: an admission ceiling is a capacity hint,
+    and refusing to boot over one would take the whole service down.
+    """
+    source = os.environ if env is None else env
+    raw = source.get(env_var)
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            logger.warning("%s=%r is not an integer; using %d", env_var, raw, default)
+            return max(1, default)
+    slots = _profile_get(profile, "asr_max_slots")
+    if slots is None:
+        asr_cfg = _profile_get(profile, "asr")
+        if isinstance(asr_cfg, dict):
+            slots = asr_cfg.get("asr_max_slots", asr_cfg.get("max_concurrent"))
+    try:
+        return max(1, int(slots) if slots is not None else default)
+    except (TypeError, ValueError):
+        return max(1, default)
+
+
+def _with_optional_max_concurrent(
+    config_cls, kwargs: dict, max_concurrent: int, spec: str, default: int
+) -> dict:
+    """Add ``max_concurrent`` to ``kwargs`` only if the dataclass declares it.
+
+    The admission fields landed in voxedge after these builders shipped, so the
+    product has to tolerate an older voxedge wheel on a device: passing an
+    unknown keyword would TypeError at backend construction and take the whole
+    profile down. When the field is missing and a value above the built-in
+    default was asked for, say so — otherwise the knob looks wired up and
+    silently does nothing, which is the failure mode this guard exists for.
+    """
+    if any(f.name == "max_concurrent" for f in dataclasses.fields(config_cls)):
+        kwargs["max_concurrent"] = max_concurrent
+    elif max_concurrent > default:
+        logger.warning(
+            "%s: admission ceiling %d requested but this voxedge build has no "
+            "max_concurrent field on %s — staying at %d slots",
+            spec,
+            max_concurrent,
+            config_cls.__name__,
+            default,
+        )
+    return kwargs
+
+
 def build_trt_edge_llm_asr_config(
     profile: Optional[dict] = None,
     env: Optional[dict] = None,
@@ -177,24 +237,9 @@ def build_sensevoice_trt_config(
     #    its own lock, so raising this only lets callers queue instead of taking
     #    a 429 -- measured on orin-nano, an execution-context pool bought 1.13x
     #    for +302 MB per slot and was rejected.
-    mc_env = env.get("SENSEVOICE_MAX_CONCURRENT")
-    max_concurrent: int
-    if mc_env is not None:
-        try:
-            max_concurrent = int(mc_env)
-        except ValueError:
-            max_concurrent = 1
-    else:
-        profile_slots = _profile_get(profile, "asr_max_slots")
-        if profile_slots is None:
-            asr_cfg = _profile_get(profile, "asr")
-            if isinstance(asr_cfg, dict):
-                profile_slots = asr_cfg.get("asr_max_slots", asr_cfg.get("max_concurrent"))
-        try:
-            max_concurrent = int(profile_slots) if profile_slots is not None else 1
-        except (TypeError, ValueError):
-            max_concurrent = 1
-    max_concurrent = max(1, max_concurrent)
+    max_concurrent = _resolve_asr_slots(
+        "SENSEVOICE_MAX_CONCURRENT", 1, profile=profile, env=env
+    )
 
     kwargs = {
         "engine": env.get("SENSEVOICE_TRT_ENGINE")
@@ -202,18 +247,9 @@ def build_sensevoice_trt_config(
         "model_dir": model_dir,
         "bpe_model": env.get("SENSEVOICE_TRT_BPE") or None,
     }
-    # ``max_concurrent`` exists only in voxedge builds carrying the SenseVoice
-    # admission change. Passing it unconditionally would TypeError on an older
-    # voxedge and block rolling the two repos independently, so feed it only
-    # when the dataclass declares it.
-    if any(f.name == "max_concurrent" for f in dataclasses.fields(SenseVoiceTRTConfig)):
-        kwargs["max_concurrent"] = max_concurrent
-    elif max_concurrent > 1:
-        logger.warning(
-            "SENSEVOICE_MAX_CONCURRENT/asr_max_slots=%d requested but this "
-            "voxedge build has no SenseVoice admission field — staying at 1 slot",
-            max_concurrent,
-        )
+    kwargs = _with_optional_max_concurrent(
+        SenseVoiceTRTConfig, kwargs, max_concurrent, "jetson.sensevoice_trt", default=1
+    )
     return SenseVoiceTRTConfig(**kwargs)
 
 
@@ -240,6 +276,7 @@ def build_sherpa_asr_config(
     the old behaviour byte-identical):
       OFFLINE_ASR_USE_ITN        → offline_use_itn (True)
       OFFLINE_ASR_LANGUAGE       → offline_language ("" = auto)
+      SHERPA_ASR_MAX_CONCURRENT  → max_concurrent (env → profile asr_max_slots → 4)
     """
     from voxedge.backends.sherpa.asr import SherpaASRConfig
 
@@ -257,7 +294,11 @@ def build_sherpa_asr_config(
     except ValueError:
         num_threads = 4
 
-    return SherpaASRConfig(
+    max_concurrent = _resolve_asr_slots(
+        "SHERPA_ASR_MAX_CONCURRENT", 4, profile=profile, env=env
+    )
+
+    kwargs = dict(
         language_mode=env.get("LANGUAGE_MODE", "zh_en"),
         streaming_model_dir=env.get("STREAMING_MODEL_DIR") or None,
         streaming_provider=streaming_provider,
@@ -267,6 +308,14 @@ def build_sherpa_asr_config(
         offline_use_itn=_env_bool("OFFLINE_ASR_USE_ITN", True, env),
         offline_language=env.get("OFFLINE_ASR_LANGUAGE", "").strip(),
     )
+    # Same forward/backward-compat guard as SenseVoice: the field exists only
+    # in voxedge builds carrying the sherpa admission change, and passing it
+    # unconditionally would TypeError on an older voxedge and block rolling the
+    # two repos independently.
+    kwargs = _with_optional_max_concurrent(
+        SherpaASRConfig, kwargs, max_concurrent, "cpu.sherpa_asr", default=4
+    )
+    return SherpaASRConfig(**kwargs)
 
 
 def build_rk_asr_config(
@@ -830,6 +879,7 @@ def build_whisper_asr_config(
       WHISPER_DECODER_THREADS → decoder_threads (0 = let onnxruntime pick)
       WHISPER_MAX_NEW_TOKENS → max_new_tokens (unset = duration-proportional)
       WHISPER_ALL_CORES      → all_cores      (False; RK3588 3-core bind)
+      WHISPER_MAX_CONCURRENT → max_concurrent (env → profile asr_max_slots → 1)
       MODEL_DIR              → root for the two directory defaults
 
     ``window_s`` is deliberately readable from env but is NOT a tuning knob: it
@@ -933,7 +983,14 @@ def build_whisper_asr_config(
             )
             return cast(default)
 
-    return WhisperASRConfig(
+    # Admission ceiling. The backend keeps one encoder handle and one decoder
+    # KV cache and serializes on its own lock, so this buys queueing instead of
+    # 429s, not parallelism — same shape as the SenseVoice knob above.
+    max_concurrent = _resolve_asr_slots(
+        "WHISPER_MAX_CONCURRENT", 1, profile=profile, env=env
+    )
+
+    kwargs = dict(
         encoder_kind=encoder_kind,
         encoder_path=encoder_path,
         decoder_dir=env.get("WHISPER_DECODER_DIR") or os.path.join(
@@ -953,6 +1010,10 @@ def build_whisper_asr_config(
         ),
         all_cores=_env_bool("WHISPER_ALL_CORES", False, env),
     )
+    kwargs = _with_optional_max_concurrent(
+        WhisperASRConfig, kwargs, max_concurrent, f"whisper.{encoder_kind}", default=1
+    )
+    return WhisperASRConfig(**kwargs)
 
 
 def build_whisper_hailo_asr_config(profile: Optional[dict] = None, env: Optional[dict] = None):
