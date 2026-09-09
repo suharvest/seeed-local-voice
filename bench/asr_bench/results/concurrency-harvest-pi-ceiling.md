@@ -184,9 +184,13 @@ profile `rpi5-hailo-whisper`, HEF + decoder cached on-device). voxedge
 `0.0.12a0` replaced with a wheel built from `voxedge` `main` 466f3e4 (the
 same commit as the J3011/J4012/RK3576/RK3588 reruns), `pip3 install --no-deps
 --force-reinstall` then `docker restart`; server confirmed at startup
-`ASR executor: max_workers=16 (source=asr_cap.max_concurrent)` —
-`OVS_MAX_CONCURRENT_SESSIONS=16` now actually takes effect instead of
-clamping to 1. `OVS_API_KEYS=testkey123`, bench run with `--api-key`.
+`ASR executor: max_workers=16 (source=asr_cap.max_concurrent)`. Unlike the
+Jetson/RK boards, R2000's admission was already 8 in the original pass
+(`effective_limit=8` at line 67 above) — `OVS_MAX_CONCURRENT_SESSIONS` was
+not clamped there. This run only raises `OVS_MAX_CONCURRENT_SESSIONS` from 8
+to 16 for headroom past the level where the old table hit rejections; it
+does not establish what caused those specific c=8 rejections (see the
+History note above). `OVS_API_KEYS=testkey123`, bench run with `--api-key`.
 `mcp_face_rec` stopped for the run (holds `/dev/hailo0`) and restarted after.
 
 Corpus: the same 100-item en <=4.0 s subset as the table above (verified

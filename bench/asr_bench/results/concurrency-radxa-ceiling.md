@@ -215,6 +215,14 @@ separate c=1 run against that subset: `results/rk3588-whisper-matched100-fixed.j
 
 ### Reading
 
+**Note:** this section describes the withdrawn 76-item table above (p95
+968.2->5530.8 ms, throughput 0.17->0.98 seg/s, "Recommended concurrency: 1").
+The "Rerun with the fixed client, fixed 72-item subset at every level"
+subsection revises this to p95 983.1->2083.4 ms, throughput 0.17->1.25
+seg/s, and **Recommended admission ceiling: 4** — kept below as the
+historical record for the pre-fix-client measurement, not the current
+reading.
+
 - The fix (`voxedge` PR #12/#13, this pass's wheel) does what it was built to
   do: it turns a hard rejection at c>=2 (cat-remote's `too_many_sessions`
   pattern) into queued admission with zero errors through c=8. p50 barely
