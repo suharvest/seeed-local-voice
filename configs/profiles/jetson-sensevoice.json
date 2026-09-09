@@ -1,6 +1,6 @@
 {
   "name": "jetson-sensevoice",
-  "description": "Jetson Orin: SenseVoice offline ASR via a standalone TensorRT engine (fp16, activation-rescaled so Chinese activations stay fp16-safe; zh/en/ja/ko/yue). ASR-only transcription profile (no TTS) — SenseVoice encoder+CTC serves the offline /asr path. Validated on Orin Nano (TRT 10.4).",
+  "description": "Jetson Orin: SenseVoice offline ASR via a standalone TensorRT engine (fp16, activation-rescaled so Chinese activations stay fp16-safe; zh/en/ja/ko/yue). ASR-only transcription profile (no TTS) — SenseVoice encoder+CTC serves the offline /asr path. Validated on Orin Nano (TRT 10.4). asr_max_slots=8 is an ADMISSION ceiling, not parallelism: the backend holds one execution context and serializes on its own lock, so callers past the first queue instead of taking a 429. It costs no VRAM (no extra contexts) and trades 429s for queueing latency.",
   "asr_backend": "jetson.sensevoice_trt",
   "execution_policy": {
     "mode": "serialized",
@@ -10,5 +10,7 @@
     "SENSEVOICE_TRT_MODEL_DIR": "/opt/models/sensevoice-trt",
     "OVS_VAD_BACKEND": "silero",
     "OVS_VAD_SILENCE_MS": "400"
-  }
+  },
+  "asr_max_slots": 8,
+  "max_concurrent_sessions": 8
 }

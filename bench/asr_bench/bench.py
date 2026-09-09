@@ -141,11 +141,16 @@ class SegmentResult:
     pre_eos_finals: int = 0
 
 
-async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int, realtime: bool) -> SegmentResult:
+async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int, realtime: bool,
+                      api_key: str = "") -> SegmentResult:
     duration_s = float(item.get("duration_s") or 0.0)
     ref = item.get("eval_transcript") or item["transcript"]
     lang = item["lang"]
     ws_url = f"{url.rstrip('/')}/asr/stream?language=auto&sample_rate=16000"
+    # OVS rejects the upgrade with 403 when OVS_API_KEYS is set and no key is
+    # presented, which looks identical to a saturated backend in the results.
+    if api_key:
+        ws_url += f"&token={api_key}"
 
     try:
         # Decoding/resampling is blocking work; keep it off the event loop so a
@@ -223,7 +228,7 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
 # ---------------------------------------------------------------------------
 
 async def run_concurrency(url: str, items: list[dict], segments_dir: Path, concurrency: int,
-                           chunk_bytes: int, realtime: bool) -> dict:
+                           chunk_bytes: int, realtime: bool, api_key: str = "") -> dict:
     queue: asyncio.Queue = asyncio.Queue()
     for it in items:
         queue.put_nowait(it)
@@ -236,7 +241,7 @@ async def run_concurrency(url: str, items: list[dict], segments_dir: Path, concu
                 item = queue.get_nowait()
             except asyncio.QueueEmpty:
                 return
-            r = await run_segment(url, item, segments_dir, chunk_bytes, realtime)
+            r = await run_segment(url, item, segments_dir, chunk_bytes, realtime, api_key)
             async with lock:
                 results.append(r)
 
@@ -302,6 +307,7 @@ def to_markdown(model: str, lang: str, url: str, runs: list[dict]) -> str:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--url", required=True, help="ws://host:port (no path) — /asr/stream is appended")
+    p.add_argument("--api-key", default="", help="value for OVS_API_KEYS; without it a key-protected server rejects the upgrade with 403, which is indistinguishable from saturation in the results")
     p.add_argument("--model", required=True, choices=["sensevoice", "whisper"], help="label only, describes which OVS profile is running on --url")
     p.add_argument("--lang", required=True, choices=["zh", "en"])
     p.add_argument("--category", default=None, help="filter manifest 'category' (e.g. short/long); default: all")
@@ -320,7 +326,8 @@ def main() -> int:
     runs = []
     for c in levels:
         print(f"== concurrency={c} lang={args.lang} model={args.model} segments={len(items)} ==", flush=True)
-        run = asyncio.run(run_concurrency(args.url, items, segments_dir, c, args.chunk_bytes, not args.no_realtime))
+        run = asyncio.run(run_concurrency(args.url, items, segments_dir, c, args.chunk_bytes,
+                                          not args.no_realtime, args.api_key))
         print(json.dumps({k: v for k, v in run.items() if k != "results"}, ensure_ascii=False, indent=2), flush=True)
         runs.append(run)
 
