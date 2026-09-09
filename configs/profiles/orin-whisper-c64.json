@@ -1,0 +1,15 @@
+{
+  "name": "orin-whisper-c64",
+  "description": "Copy of orin-whisper with the admission ceiling raised from 8 to 64, for the orin-nano (J3011) / orin-nx (J4012) Whisper concurrency-ceiling sweep (bench/asr_bench/DISPATCH.md). Same backend/build (base, bf16 TensorRT encoder, ONNX decoder with KV cache) — this only changes how many callers may queue instead of taking a 429.",
+  "asr_backend": "jetson.whisper_trt",
+  "execution_policy": {
+    "mode": "concurrent"
+  },
+  "env": {
+    "WHISPER_LANGUAGE": "en",
+    "WHISPER_VARIANT": "base",
+    "WHISPER_WINDOW_S": "30"
+  },
+  "max_concurrent_sessions": 64,
+  "asr_max_slots": 64
+}
