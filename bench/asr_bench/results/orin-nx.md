@@ -57,11 +57,14 @@ working concurrency=2+ result). Full raw JSON: `orin-nx-sensevoice-zh.json`.
 ### Can the session cap be raised? No — checked, not assumed
 
 `jetson-sensevoice.json`'s `execution_policy` is `{"mode": "serialized",
-"shared_resource": "gpu"}`. Traced the backend source
-(`voxedge.backends.jetson.sensevoice_trt.SenseVoiceTRTBackend.__init__`):
-a single `threading.Lock()` guards the one TensorRT execution context, with
-the comment "single shared context; offline is serialized" — a hardware/
-runtime-context fact, not a config choice.
+"shared_resource": "gpu"}`. Traced the backend source at the exact
+`voxedge` version this image bakes in (`0.0.5a0`, confirmed via
+`voxedge.__version__` inside the container — see EVIDENCE):
+`voxedge/backends/jetson/sensevoice_trt.py:96`,
+`SenseVoiceTRTBackend.__init__` —
+`self._lock = threading.Lock()  # single shared context; offline is
+serialized`. A single `threading.Lock()` guards the one TensorRT execution
+context — a hardware/runtime-context fact, not a config choice.
 
 Verified empirically: mounted an edited `jetson-sensevoice.json` with
 `execution_policy.mode: "concurrent"` and `max_concurrent_sessions: 4` over
@@ -89,17 +92,26 @@ whisper_trt` raises `ImportError: cannot import name 'whisper_trt'`, and
 jetson.trt_edge_llm, rk.asr}` — no `jetson.whisper_trt` key.
 
 Root cause: Whisper backend registration landed in commit `7cc9dd55`
-(2026-08-28, "Whisper across five edge accelerators"), which is **not yet
-merged to `main`** (only present on `bench-asr-work` and related bench
-branches) — and even if it were, the compose default image tag on `main`
-(`v0.9.0-ondemand-20260721c`, July 21) predates it. The baked `voxedge`
-version in this image is `0.0.5a0`. No newer Jetson image with Whisper
-support was found to pull (same category of blocker cat-remote and radxa
-each hit for their own platforms — image build lags source by weeks).
+(2026-08-28, "Whisper across five edge accelerators"), and `voxedge`
+0.0.12a0 (commit `a867e4cd`, "the first release with the Whisper backend")
+followed it — both **are already merged to `main`** (verified against
+`origin/main` at `d932330e`, not a stale local ref: `git merge-base
+--is-ancestor 7cc9dd55 origin/main` exits 0). The blocker is not an
+unmerged commit — it is that the **compose default image tag on `main`**
+(`v0.9.0-ondemand-20260721c`, built July 21) predates both changes and
+bakes in `voxedge==0.0.5a0` (confirmed via `voxedge.__version__` inside the
+container, see EVIDENCE), which has no `whisper_trt` module at all. No
+newer Jetson image with Whisper support was found to pull (same category of
+blocker cat-remote and radxa each hit for their own platforms — the
+published image lags merged source by weeks).
 
-**Conclusion**: Whisper Orin support exists in source (`7cc9dd55`, unmerged)
-but has no distributable image today. Building one is out of scope for this
-bench pass (dispatch scope is "run the bench," not "build a release image").
+**Conclusion**: Whisper Orin support exists in merged source (`7cc9dd55`,
+`a867e4cd`) but the only image currently pulled by `main`'s compose default
+predates it (`v0.9.0-ondemand-20260721c` / `voxedge==0.0.5a0`) and has no
+distributable successor today. Building/publishing a newer image is out of
+scope for this bench pass (dispatch scope is "run the bench," not "build a
+release image").
+
 The `orin-whisper.json` profile's own description string (encoder 11.4 ms on
 NX, TTFT 58-83 ms) is cited from that commit's one-off validation, not
 measured by this bench tool here.
@@ -204,7 +216,9 @@ $ docker run --rm --entrypoint python3 .../seeed-local-voice:v0.9.0-ondemand-202
 0.0.5a0
 
 $ git merge-base --is-ancestor 7cc9dd55 origin/main; echo $?
-1   # NOT an ancestor — Whisper commit is unmerged to main
+0   # IS an ancestor — Whisper commit is already on main (origin/main at
+    #   time of this check: d932330e); the blocker is the stale image tag,
+    #   not the source merge state (see "Whisper (en)" section above)
 ```
 
 ### Shared working tree caution (repo hygiene note for whoever reads this)
