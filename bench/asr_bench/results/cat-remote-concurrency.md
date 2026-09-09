@@ -147,14 +147,19 @@ Tailscale). No other container held the NPU during this run
   device has not hit an admission or error ceiling by c=16 — CPU/NPU queueing
   is the limit, not the session limiter. The single NPU core (`NPU_CORE_0`,
   the other core still unused — see occupancy below) serializes 16 requests'
-  worth of inference behind one context, so tail latency keeps growing
-  linearly with concurrency; no wall was hit up to 16.
-- CER is 0.0599 at both levels, unchanged from every other concurrency row in
-  this file — queueing does not affect what gets transcribed, only when.
+  worth of inference behind one context, so tail latency increased in these
+  runs (p95 +886 ms from c=8 to c=12, +2040 ms from c=12 to c=16); no wall
+  was hit up to 16.
+- CER is 0.0599 at c=12 and c=16, matching the after/repeat-fix rows above
+  and the before c=1 row; the before c=2/4/8 rows report 0.0667 on a
+  much smaller surviving sample (1 of 20 segments), so this comparison is
+  scoped to the successful (20/20) runs.
 - Throughput: 1.08 seg/s at c=12, 1.13 seg/s at c=16 — up from 0.87 seg/s at
   c=8, but the marginal gain per added session is shrinking (c=8→12 added 4
-  sessions for +0.21 seg/s, c=12→16 added 4 sessions for +0.05 seg/s): the
-  single-core NPU is approaching its throughput ceiling.
+  sessions for +0.21 seg/s, c=12→16 added 4 sessions for +0.05 seg/s). That
+  is consistent with the single-core NPU approaching a throughput ceiling,
+  but two 20-item runs are not enough to confirm saturation — a hypothesis,
+  not an established ceiling.
 
 NPU occupancy sampled every 2 s for 240 s spanning both runs
 (`/sys/kernel/debug/rknpu/load`, 120 samples): 105 samples at 0% (both cores
