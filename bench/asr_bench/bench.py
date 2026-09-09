@@ -4,7 +4,10 @@
 Sends each audio segment as a "pseudo-streaming, non-streaming" pass: the
 whole segment is fed in fixed-size binary chunks at 1.0x real-time pace (like
 a live mic), then an empty binary frame signals end-of-segment, and the
-client waits for the `is_final` JSON message. This matches how
+client waits for the server's final. `?vad=none` is pinned so the client's
+EOS frame is the only endpoint detector — see the "--server-vad" flag and
+`server/main.py`'s "Streaming ASR endpointing" note for why running the
+server VAD alongside a client that sends EOS loses text. This matches how
 docs/perf-test-runbook.md and bench/perf/asr_stream_ws_bench.py already
 exercise the service; this script generalizes that single-shot pattern to
 N concurrent sessions and reports percentiles + RTF + CER/WER.
@@ -63,6 +66,11 @@ def load_items(segments_dir: Path, lang: str, category: str | None, limit: int |
     if not items:
         raise SystemExit(f"No items for lang={lang} category={category} in {manifest_path}")
     return items
+
+
+#: Cap on the gap between two server messages once the first final has
+#: arrived. Not applied before it, so a slow decode is not cut off.
+_IDLE_GAP_S = 5.0
 
 
 def load_pcm16(path: Path) -> bytes:
@@ -142,11 +150,23 @@ class SegmentResult:
 
 
 async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int, realtime: bool,
-                      api_key: str = "") -> SegmentResult:
+                      api_key: str = "", server_vad: bool = False) -> SegmentResult:
     duration_s = float(item.get("duration_s") or 0.0)
     ref = item.get("eval_transcript") or item["transcript"]
     lang = item["lang"]
     ws_url = f"{url.rstrip('/')}/asr/stream?language=auto&sample_rate=16000"
+    # ENDPOINTING: pick exactly one detector. This client sends the EOS frame,
+    # so it IS the detector; leaving the server VAD on as well is the
+    # mutually-exclusive misconfiguration documented at server/main.py:5208
+    # ("the detectors race ... text goes missing"). Under queueing the server's
+    # mid-utterance final is delivered AFTER our EOS, and a client that stops
+    # at the first is_final scores that fragment as the whole segment. Measured
+    # on J4012 at c=24: 24 of 72 matched items came back as a strict prefix of
+    # their c=1 text. ``--server-vad`` keeps the open-mic mode available; the
+    # collection loop below then accumulates every final, which is what the
+    # endpoint's contract requires of an open-mic client.
+    if not server_vad:
+        ws_url += "&vad=none"
     # OVS rejects the upgrade with 403 when OVS_API_KEYS is set and no key is
     # presented, which looks identical to a saturated backend in the results.
     if api_key:
@@ -172,10 +192,13 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
             feed_wall_ms = (time.perf_counter() - feed_start) * 1000
 
             # Drain whatever the server already queued while audio was being
-            # fed. Without this, an endpoint that emits a final mid-feed has
-            # that message dequeued after EOS and mistaken for the segment's
-            # own result: its text alone is scored, and eos_to_final_ms
-            # measures a queue read rather than decoding.
+            # fed. With ``vad=none`` nothing can arrive here; under
+            # ``--server-vad`` these are real mid-utterance segments and the
+            # count is reported so the caller knows decoding overlapped feeding.
+            # This drain is NOT the place that guarantees completeness — a
+            # server final delayed past EOS by queueing lands in the post-EOS
+            # loop below, which is why that loop accumulates rather than
+            # returning on the first one.
             pre_eos_finals: list[str] = []
             while True:
                 try:
@@ -191,28 +214,75 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
 
             eos_at = time.perf_counter()
             await ws.send(b"")  # empty frame = end-of-segment
-            final_msg = None
-            deadline = eos_at + 20
+            # Read until the server closes the stream, accumulating EVERY
+            # final. The server closes right after the segment's EOS final, so
+            # the close is the completion signal — not the absence of an
+            # ``endpoint`` field, which a backend-driven midstream final
+            # (server/main.py, the get_partial is_endpoint path) also lacks.
+            # Returning on the first final silently dropped the rest of the
+            # utterance whenever the server had a queued mid-utterance final
+            # still to deliver.
+            post_eos_finals: list[str] = []
+            first_final_at = None
+            stream_closed = False
+            close_error = None
+            server_error = None
+            deadline = eos_at + 40
+            # A gap cap, applied only once something has arrived. Before the
+            # first final the whole deadline is available, so a slow decode is
+            # not cut off at 5 s.
+            idle_timeout = _IDLE_GAP_S
             while time.perf_counter() < deadline:
-                raw = await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - time.perf_counter()))
+                remaining = max(0.1, deadline - time.perf_counter())
+                budget = min(idle_timeout, remaining) if first_final_at else remaining
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=budget)
+                except (asyncio.TimeoutError, TimeoutError):
+                    break
+                except websockets.ConnectionClosedOK:
+                    stream_closed = True
+                    break
+                except websockets.ConnectionClosed as exc:
+                    close_error = f"stream closed abnormally: {exc}"
+                    break
                 try:
                     msg = json.loads(raw)
                 except (TypeError, ValueError):
                     continue
-                if msg.get("is_final"):
-                    final_msg = msg
-                    break
-            eos_to_final_ms = (time.perf_counter() - eos_at) * 1000
-            tail = (final_msg or {}).get("text", "")
+                # The server's terminal error frame carries is_final too
+                # (server/main.py), and ``busy`` means the utterance was
+                # dropped for backpressure. Either way this segment has no
+                # transcript; recording it as a result would score an empty
+                # or partial string as if the run had succeeded.
+                kind = msg.get("type")
+                if kind in ("error", "busy"):
+                    server_error = f"server sent {kind}: {msg.get('reason') or msg.get('text') or ''}".strip()
+                    continue
+                if not msg.get("is_final"):
+                    continue
+                if first_final_at is None:
+                    first_final_at = time.perf_counter()
+                if msg.get("text"):
+                    post_eos_finals.append(msg["text"])
+            eos_to_final_ms = ((first_final_at or time.perf_counter()) - eos_at) * 1000
             joiner = "" if lang == "zh" else " "
-            text = joiner.join([t for t in (*pre_eos_finals, tail) if t])
+            text = joiner.join([t for t in (*pre_eos_finals, *post_eos_finals) if t])
+            # Complete means the server sent at least one final, sent no error
+            # or busy frame, and closed the stream without an error code —
+            # which it does only after the segment's own EOS final.
+            complete = (first_final_at is not None and stream_closed
+                        and server_error is None)
             err = error_rate(ref, text, lang)
             rtf = (eos_to_final_ms / 1000.0) / duration_s if duration_s > 0 else float("nan")
             return SegmentResult(
                 id=item["id"], lang=lang, duration_s=duration_s,
                 feed_wall_ms=feed_wall_ms, eos_to_final_ms=eos_to_final_ms,
-                rtf=rtf, text=text, ref=ref, err=err, ok=final_msg is not None,
-                error=None if final_msg is not None else "no final message before deadline",
+                rtf=rtf, text=text, ref=ref, err=err, ok=complete,
+                error=None if complete else (
+                    server_error or close_error or (
+                        "no final message before deadline" if first_final_at is None
+                        else "server did not close the stream after EOS; the "
+                             "transcript may be incomplete")),
                 pre_eos_finals=len(pre_eos_finals),
             )
     except Exception as exc:  # noqa: BLE001 — record and continue, don't crash the run
@@ -228,7 +298,8 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
 # ---------------------------------------------------------------------------
 
 async def run_concurrency(url: str, items: list[dict], segments_dir: Path, concurrency: int,
-                           chunk_bytes: int, realtime: bool, api_key: str = "") -> dict:
+                           chunk_bytes: int, realtime: bool, api_key: str = "",
+                           server_vad: bool = False) -> dict:
     queue: asyncio.Queue = asyncio.Queue()
     for it in items:
         queue.put_nowait(it)
@@ -241,7 +312,7 @@ async def run_concurrency(url: str, items: list[dict], segments_dir: Path, concu
                 item = queue.get_nowait()
             except asyncio.QueueEmpty:
                 return
-            r = await run_segment(url, item, segments_dir, chunk_bytes, realtime, api_key)
+            r = await run_segment(url, item, segments_dir, chunk_bytes, realtime, api_key, server_vad)
             async with lock:
                 results.append(r)
 
@@ -316,6 +387,7 @@ def main() -> int:
     p.add_argument("--limit", type=int, default=None, help="cap segments per concurrency run")
     p.add_argument("--chunk-bytes", type=int, default=4096)
     p.add_argument("--no-realtime", action="store_true", help="send chunks as fast as possible instead of 1.0x real-time pace")
+    p.add_argument("--server-vad", action="store_true", help="leave the server VAD on (open-mic mode) instead of pinning ?vad=none. The client still sends EOS, so the two detectors race — see server/main.py Streaming ASR endpointing. Only for measuring that mode deliberately.")
     p.add_argument("--out", default=None, help="write JSON results here; a sibling .md is also written")
     args = p.parse_args()
 
@@ -327,7 +399,7 @@ def main() -> int:
     for c in levels:
         print(f"== concurrency={c} lang={args.lang} model={args.model} segments={len(items)} ==", flush=True)
         run = asyncio.run(run_concurrency(args.url, items, segments_dir, c, args.chunk_bytes,
-                                          not args.no_realtime, args.api_key))
+                                          not args.no_realtime, args.api_key, args.server_vad))
         print(json.dumps({k: v for k, v in run.items() if k != "results"}, ensure_ascii=False, indent=2), flush=True)
         runs.append(run)
 

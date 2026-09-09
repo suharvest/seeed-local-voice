@@ -32,8 +32,19 @@ top, so `asr_bench` talks to OVS directly.
 For each audio segment: feed 16 kHz/16-bit/mono PCM in fixed-size chunks at
 1.0x real-time pace (a "pseudo-streaming, actually non-streaming" pass — the
 whole segment is sent, then an empty binary frame marks end-of-segment, and
-the client waits for `is_final`), matching how the runbook's own bench
+the client waits for the final), matching how the runbook's own bench
 script already drives the service.
+
+**Endpointing.** The connection is opened with `?vad=none`: the client's EOS
+frame is the only endpoint detector. `/asr/stream` supports exactly one
+detector at a time (see "Streaming ASR endpointing" in `server/main.py`), and
+running the server VAD alongside a client that sends EOS makes the two race —
+the server splits the utterance and delivers its mid-utterance final whenever
+the ASR queue lets it, which under load is after the client's EOS. Every
+Whisper concurrency sweep before this change ran that way and recorded
+shortened transcripts at c>=16 as a result. `--server-vad` measures open-mic
+mode deliberately; the client then accumulates every final the server sends,
+which is what an open-mic client has to do.
 
 - **Final latency** = wall time from the empty EOS frame to the `is_final`
   message (ms). Not the same as "audio duration + decode time" — see the

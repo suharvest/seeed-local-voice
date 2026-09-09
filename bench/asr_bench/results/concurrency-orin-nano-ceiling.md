@@ -4,11 +4,11 @@ Zero errors through c=32 on SenseVoice, with p95 breaking down at c=48 — that 
 this board's ceiling for that backend. Whisper's admission ceiling was
 previously 1 (the installed `voxedge==0.0.13a0` package had no
 `max_concurrent` field on `WhisperASRConfig`); with a wheel built from
-`voxedge` `main` (466f3e4, unreleased) the ceiling now follows the profile
-and the real bottleneck is a serialized decode queue that, above c=8,
-produces reproducibly shorter collected transcripts for the same audio
-(not just added latency) — recommended ceiling 8, see the Whisper section
-below.
+`voxedge` `main` (466f3e4, unreleased) the ceiling now follows the profile.
+The shorter-transcript effect this file previously attributed to the backend
+above c=8 was a defect in the bench client, traced to the frame level on
+J4012 and fixed in `bench/asr_bench/bench.py`; the J3011 Whisper numbers
+below were collected with the pre-fix client. See the Whisper section.
 
 ## SenseVoice (zh)
 
@@ -107,65 +107,43 @@ and restarted after, `docker ps` reconciled against the pre-test list.
 GR3D_FREQ peak 69%, RAM peak 3.03/7.62 GB (`orin-nano-ceiling-tegrastats.log`
 whole-sweep peaks, not per-level).
 
-Zero errors at every level tested (c=32 was not run — see below). p95 stays
+Zero errors at every level tested (c=32 was not run). p95 stays
 in a 1.1-1.3 s band through c=8, then more than doubles at c=16 (1.29 s ->
 3.76 s, 2.9x) and keeps climbing at c=24 (7.01 s) — the coordinator/executor
 serializes Whisper decode behind one CPU KV-cache path
 (`execution_policy.mode: concurrent` is declared but the backend still runs
 one decode at a time; see `voxedge/backends/whisper/asr.py`), so admission
 concurrency above the decode's real throughput turns into queueing, not
-parallel work.
+parallel work. How much of the latency growth in this table is that queueing
+and how much is the client's first-final exit is not separated by this data.
 
-**Accuracy is also confirmed to degrade under load, not just latency** — this
-was checked directly with a same-item, varying-concurrency comparison (a
-follow-up c=1 run against the identical 72-item corpus subset used at c=24,
-`docker restart` first, `effective_limit=64` reconfirmed), not inferred from
-the aggregate WER trend alone:
+**The accuracy finding previously recorded here is withdrawn.** It was
+collected with a bench client that opened `/asr/stream` with the server
+VAD left on while also sending the EOS frame, and returned on the first
+`is_final` after EOS. `/asr/stream` supports exactly one endpoint detector at
+a time (`server/main.py`, `docs/CONFIGURATION.md`); with both running the
+server splits the utterance and delivers its mid-utterance final whenever the
+ASR queue allows, which under load is after the client's EOS. The client then
+scored that fragment as the whole segment.
 
-- **c=4 and c=8 show no per-item WER regression**: every item shared with
-  the c=1/72 baseline (24 items at c=4, 40 at c=8) scores the identical
-  `err` value it scored at c=1 — no item got worse at these levels. (Text
-  can still vary slightly at equal WER, e.g. `en_pub_35` drops a trailing
-  "air." at c=8 while scoring the same `err` because the reference word is
-  "PAIR." — so this is "no observed WER regression," not "byte-identical
-  transcripts.")
-- **c=16 and c=24 show real, reproducible score changes**: of the 64 items
-  shared with c=16, 9 score differently than at c=1 — 7 worse, 2 better
-  (`en_pub_31` improves 0.500 -> 0.375; `en_pub_62` improves 0.778 -> 0.667).
-  Several items at c=24 score sharply worse than their own c=1 transcript
-  for the *same audio*. Example (`en_pub_41`, ref "YET LITTLE AS IT WAS IT
-  HAD ALREADY MADE A VAST DIFFERENCE IN THE ASPECT OF THE ROOM"): c=1
-  transcribes it in full ("Yet little as it was it had arisen. already made
-  a vast difference in the aspect of the room.", `pre_eos_finals=3`) while
-  the c=24 run for the identical segment returns just `"Yet"`
-  (`pre_eos_finals=0`). Two more examples from the same comparison:
-  `en_pub_63` ("I had scarcely no what I had been saying or doing..." at
-  c=1 vs just "I had scarcely no" at c=24) and `en_pub_38` ("Oh, let him
-  come along she urged. I do love to see him about that old house." at c=1
-  vs just "Oh, let him" at c=24). What the client collects is a shorter
-  transcript at higher concurrency for the same audio — a real,
-  reproducible correctness regression, not corpus-composition and not
-  merely slower-but-correct decoding. The exact mechanism is **not**
-  confirmed: `bench.py` returns on the first `is_final` after the EOS
-  frame, so this rules out "same output, just slower" but cannot by itself
-  distinguish the backend actually truncating decode from a delayed/split
-  final message where later content was sent but not collected by this
-  client — that would need a message-level trace on the wire, not done
-  here.
-- The aggregate WER trend (3.62% at c=1 to 25.92% at c=24) is therefore a mix
-  of both effects: some of the rise from c=1 to c=8 is corpus composition
-  (larger `--limit` includes harder LibriSpeech items never tested at c=1,
-  and those items score identically regardless of concurrency), but the
-  jump at c=16/c=24 includes a real per-item score regression on top of that,
-  isolated by the matched-item comparison above.
+That is what the matched-item "shorter transcript at higher concurrency"
+finding previously recorded here measured. The mechanism was traced to the
+frame level on J4012 (`results/concurrency-orin-nx-ceiling.md`, Whisper
+section) using the same client, the same profile and the same corpus: of the
+24 items captured at both c=1 and c=24 there, the 4 that differed were each a
+strict prefix of the c=1 text, and for all 4 the join of every captured final
+matches between the two levels. With the fixed client, J4012 transcribes 0 of
+72 items differently at c=8, c=16 or c=24 than at c=1. J3011 has not been
+rerun, so the attribution here rests on that J4012 trace plus the fact that
+both boards ran the same client code.
 
-**Recommended admission ceiling: 8** — the highest level tested with no
-observed per-item WER regression vs the c=1 baseline and p95 under the 1.5 s
-bar; c=16 and above show both rising latency and a reproducible drop in
-matched-item transcript completeness. c=32 was not run since c=16/c=24 already
-established the ceiling has been passed by a wide margin on two independent
-measures.
-
+The J3011 table above was produced by the pre-fix client, so both its WER
+column and its latency column carry that behaviour: for a split utterance the
+client stopped reading at the first final, which is a different message than
+the segment's own. The accuracy-regression conclusion and the ceiling
+recommendation that rested on it are withdrawn. The `bench.py` change in this
+same commit pins `?vad=none` and accumulates every final; rerunning this
+board's sweep with it is what produces a J3011 Whisper ceiling.
 
 ## Files
 

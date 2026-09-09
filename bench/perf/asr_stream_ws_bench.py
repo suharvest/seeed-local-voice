@@ -174,7 +174,12 @@ def main() -> int:
         x for x in manifest["files"]
         if x["category"] == args.category and x["lang"] == args.lang
     ][: args.limit]
-    url = f"ws://{args.host}/asr/stream?language=auto&sample_rate=16000"
+    # vad=none: this client sends the EOS frame, so it is the endpoint
+    # detector. Leaving the server VAD on as well makes the two race and the
+    # server's mid-utterance final can land after EOS, where the loop below
+    # takes it for the segment's own result (see bench/asr_bench/bench.py and
+    # "Streaming ASR endpointing" in server/main.py).
+    url = f"ws://{args.host}/asr/stream?language=auto&sample_rate=16000&vad=none"
 
     rows = []
     for item in items:
