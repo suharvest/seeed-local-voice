@@ -831,9 +831,18 @@ _SENSEVOICE_RKNN_SHARED = ("am.mvn", "embedding.npy", "chn_jpn_yue_eng_ko_specto
 # normal ~37); the rescaled build passed all 45 with magnitudes matching the
 # fp32 CPU reference. Keep both platforms on -scaled; do not "simplify" this
 # back to a per-SoC split.
+#
+# The `t172` in the filename is the encoder sequence length the .rknn was frozen
+# to: 172 LFR frames = 10.1 s of audio, against the 344 (20.4 s) the first builds
+# used. A VAD-delimited utterance is 4-6 s, so the 344 encoder spent more than
+# half its NPU time on zero padding. Measured on idle boards, 100-segment corpus:
+# single-pass encoder latency RK3588 1120 -> 441 ms and RK3576 675 -> 343 ms, zh
+# CER 0.0513 -> 0.0474, and RK3588 p95 over /asr/stream drops under 1.5 s at
+# every concurrency from 1 to 8 where the 344 build cleared none. Audio longer
+# than one pass is windowed by the backend, not truncated.
 _SENSEVOICE_RKNN_FILE = {
-    "rk3576": "sense-voice-encoder.rk3576.fp16-scaled.rknn",
-    "rk3588": "sense-voice-encoder.rk3588.fp16-scaled.rknn",
+    "rk3576": "sense-voice-encoder.rk3576.fp16-scaled.t172.rknn",
+    "rk3588": "sense-voice-encoder.rk3588.fp16-scaled.t172.rknn",
 }
 
 

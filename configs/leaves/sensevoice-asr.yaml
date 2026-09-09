@@ -69,7 +69,7 @@ leaves:
     resources:
       peak_unified_mb: 1200  # TBD-measure (placeholder; encoder-only is smaller)
 
-  # --- RK3576 RKNN (n1; plain fp16 encoder) ---
+  # --- RK3576 RKNN (n1; fp16-scaled encoder, 172-frame sequence) ---
   asr.sensevoice_rknn.rk3576.n1:
     capability: asr
     backend: rk.sensevoice_rknn
@@ -81,7 +81,9 @@ leaves:
     artifacts:
       repo: harvestsu/sensevoice-rknn
       files:
-        - sense-voice-encoder.rk3576.fp16.rknn
+        # SCALED variant, frozen to a 172-frame (10.1 s) encoder — matches
+        # _SENSEVOICE_RKNN_FILE in server/core/model_downloader.py.
+        - sense-voice-encoder.rk3576.fp16-scaled.t172.rknn
     runtime_env:
       LANGUAGE_MODE: rk
       RK_PLATFORM: rk3576
@@ -93,7 +95,7 @@ leaves:
       exclusive: npu  # RK NPU is a single shared accelerator (see validator)
       peak_unified_mb: 900  # TBD-measure (placeholder; RK smaller than Jetson)
 
-  # --- RK3588 RKNN (n1; fp16-SCALED encoder — see gotchas) ---
+  # --- RK3588 RKNN (n1; fp16-SCALED encoder, 172-frame sequence — see gotchas) ---
   asr.sensevoice_rknn.rk3588.n1:
     capability: asr
     backend: rk.sensevoice_rknn
@@ -106,7 +108,8 @@ leaves:
       repo: harvestsu/sensevoice-rknn
       files:
         # SCALED variant — do NOT substitute the plain fp16 file (gotcha above).
-        - sense-voice-encoder.rk3588.fp16-scaled.rknn
+        # Frozen to a 172-frame (10.1 s) encoder; see model_downloader.py.
+        - sense-voice-encoder.rk3588.fp16-scaled.t172.rknn
     runtime_env:
       LANGUAGE_MODE: rk
       RK_PLATFORM: rk3588
