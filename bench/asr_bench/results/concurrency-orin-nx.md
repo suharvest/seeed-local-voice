@@ -23,10 +23,28 @@ parallel decode.
 | 2 | 20 | 0 | 148.8 | 264.0 | 0.031 | 0.30 | 5.99% |
 | 4 | 20 | 0 | 175.0 | 618.6 | 0.037 | 0.58 | 5.99% |
 | 8 | 20 | 0 | 178.6 | 330.2 | 0.032 | 1.03 | 5.99% |
+| 12 | 20 | 0 | 143.1 | 167.6 | 0.025 | 1.41 | 5.99% |
+| 16 | 20 | 0 | 157.7 | 273.2 | 0.029 | 1.65 | 5.99% |
 
 CER is 5.99% at every level — decoding is deterministic, queueing only adds
-latency. Throughput scales 0.16 -> 1.03 seg/s (6.4x) from c=1 to c=8; p50
-stays under 180 ms through c=8, p95 stays under 620 ms at every level tested.
+latency. Throughput scales 0.16 -> 1.65 seg/s (10.3x) from c=1 to c=16; p50
+stays under 180 ms through c=16, p95 stays under 620 ms at every level
+tested (the single highest p95, 618.6 ms, is at c=4, not at the top of the
+sweep).
+
+c=12 and c=16 were run in a separate session from c=1-8 above: same board,
+same profile (`asr_max_slots`/`max_concurrent_sessions` raised 8→16, server
+confirmed `SessionLimiter initialized: effective_limit=16` and `ASR
+executor: max_workers=16`), image
+`sensecraft-missionpack.seeed.cn/solution/seeed-local-voice:v0.9.0-ondemand-20260721c`
+with `server/`+`configs/` bind-mounted from openvoicestream `main` and
+voxedge upgraded in-container to 0.0.13a0 (+ `sentencepiece` +
+`kaldi_native_fbank`) — the same clean-repro recipe used for
+`concurrency-orin-nano-clean.md`. `edge-inspection-mosquitto`,
+`esk-jetson-rtsp-pub` and `esk-jetson-rtsp-server` were stopped for this
+pass and restarted afterward. Zero errors through c=16 — like the Orin Nano
+clean run, this sweep did not find the real admission ceiling for this
+board either.
 
 ## Whisper en (base, bf16) — profile `orin-whisper`
 
