@@ -532,3 +532,98 @@ def test_diar_cap_max_concurrent_nonpositive_is_none():
         profile=None, env={"OVS_DIARIZE": "1", "OVS_DIARIZE_MAX_CONCURRENT": "0"}
     )
     assert cap is not None and cap.max_concurrent is None
+
+
+# ---------- ASR inference gate sizing (session admission vs in-flight) ----
+#
+# The contract other backends opt into: ``supports_parallel=False`` with
+# ``max_concurrent=N`` means "admit N sessions, run one inference at a time,
+# queue the rest". Nothing below names a backend — the resolver reads only
+# what a capability declares.
+
+
+def _cap_resolve(asr_cap, env=None, profile_extra=None, monkeypatch=None):
+    """resolve() against a hand-built ASR capability, no real backend."""
+    import server.core.capability_resolver as cr
+
+    profile = {"asr_backend": "fake.asr"}
+    if profile_extra:
+        profile.update(profile_extra)
+    orig = cr._capability_for
+    cr._capability_for = lambda cls, prof, spec=None, kind=None: (
+        asr_cap if kind == "asr" else ConcurrencyCapability(
+            supports_parallel=True, max_concurrent=None,
+        )
+    )
+    try:
+        return cr.resolve(profile=profile, env=env or {})
+    finally:
+        cr._capability_for = orig
+
+
+def test_serial_backend_admits_n_but_infers_one():
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=False, max_concurrent=4)
+    )
+    assert r.session_ceiling == 4
+    assert r.asr_infer_concurrency == 1
+
+
+def test_parallel_backend_infers_as_wide_as_it_admits():
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=True, max_concurrent=3)
+    )
+    assert r.session_ceiling == 3
+    assert r.asr_infer_concurrency == 3
+
+
+def test_default_backend_is_unchanged_one_to_one():
+    r = _cap_resolve(ConcurrencyCapability())
+    assert r.session_ceiling == 1
+    assert r.asr_infer_concurrency == 1
+    assert r.asr_queue_depth == 0
+
+
+def test_queue_depth_defaults_to_one_slot_per_waiting_session():
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=False, max_concurrent=4)
+    )
+    assert r.asr_queue_depth == 3  # 4 admitted - 1 running
+
+
+def test_queue_depth_env_override():
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=False, max_concurrent=4),
+        env={"OVS_ASR_INFER_QUEUE_DEPTH": "9"},
+    )
+    assert r.asr_queue_depth == 9
+
+
+def test_infer_concurrency_env_may_lower_but_not_raise():
+    cap = ConcurrencyCapability(supports_parallel=True, max_concurrent=4)
+    lowered = _cap_resolve(cap, env={"OVS_ASR_INFER_CONCURRENCY": "2"})
+    assert lowered.asr_infer_concurrency == 2
+    assert lowered.clamp_warnings == []
+
+    raised = _cap_resolve(cap, env={"OVS_ASR_INFER_CONCURRENCY": "8"})
+    assert raised.asr_infer_concurrency == 4
+    assert any("OVS_ASR_INFER_CONCURRENCY=8" in w for w in raised.clamp_warnings)
+
+
+def test_serial_backend_env_cannot_widen_inference():
+    """The one that matters: a shared runtime must stay serial."""
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=False, max_concurrent=8),
+        env={"OVS_ASR_INFER_CONCURRENCY": "4"},
+    )
+    assert r.asr_infer_concurrency == 1
+    assert any("OVS_ASR_INFER_CONCURRENCY=4" in w for w in r.clamp_warnings)
+
+
+def test_operator_session_clamp_shrinks_the_queue_with_it():
+    r = _cap_resolve(
+        ConcurrencyCapability(supports_parallel=False, max_concurrent=8),
+        env={"OVS_MAX_CONCURRENT_SESSIONS": "2"},
+    )
+    assert r.session_ceiling == 2
+    assert r.asr_queue_depth == 1

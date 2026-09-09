@@ -236,6 +236,15 @@ class ResolvedCapability:
     tts_cap: ConcurrencyCapability
     clamp_warnings: list[str] = field(default_factory=list)
     diar_cap: Optional[ConcurrencyCapability] = None
+    # -- ASR inference gate (session admission vs in-flight inference) ------
+    # ``session_ceiling`` above is how many connections may be OPEN.
+    # ``asr_infer_concurrency`` is how many of them may be INSIDE the ASR
+    # runtime at the same time. They were the same number until the gate
+    # existed; a backend declaring ``supports_parallel=False`` with
+    # ``max_concurrent=N`` now means "admit N, run one at a time".
+    # ``asr_queue_depth`` bounds the FIFO backlog; ``None`` = unbounded.
+    asr_infer_concurrency: int = 1
+    asr_queue_depth: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -462,6 +471,67 @@ def resolve(
     if exec_warning:
         warnings.append(exec_warning)
 
+    # ---- ASR inference gate sizing ---------------------------------------
+    #
+    # Backend-agnostic on purpose: nothing here names a backend, a platform or
+    # an env beyond the two operator overrides. A backend opts in purely by
+    # what it declares.
+    #
+    # ``max_concurrent`` keeps its existing meaning — the session admission
+    # ceiling, which is what the limiter has always read it as.
+    # ``supports_parallel`` answers the separate question of whether those
+    # admitted sessions may be inside the runtime simultaneously. So:
+    #
+    #   supports_parallel=False, max_concurrent=N  → admit N, infer 1 at a
+    #       time, queue the rest FIFO. (Shared single-runtime backends: one
+    #       RKNN context, one sherpa recognizer, one TRT engine.)
+    #   supports_parallel=True,  max_concurrent=N  → admit N, infer N.
+    #
+    # The gate never widens concurrency past what the backend declared, so a
+    # backend that says nothing keeps 1:1 and never reaches the queue at all.
+    if asr_cap.supports_parallel:
+        # ``None`` here means "no fixed cap": inference is as wide as the
+        # sessions we admit, so the gate has nothing to narrow.
+        asr_infer_concurrency = (
+            asr_cap.max_concurrent
+            or session_ceiling
+            or _UNKNOWN_DEFAULT
+        )
+    else:
+        asr_infer_concurrency = 1
+
+    env_infer = _parse_positive_int(
+        env_map.get("OVS_ASR_INFER_CONCURRENCY"),
+        label="OVS_ASR_INFER_CONCURRENCY",
+    )
+    if env_infer is not None:
+        if env_infer > asr_infer_concurrency:
+            warnings.append(
+                f"OVS_ASR_INFER_CONCURRENCY={env_infer} exceeds what the ASR"
+                f" backend declares (supports_parallel="
+                f"{asr_cap.supports_parallel}, max_concurrent="
+                f"{asr_cap.max_concurrent}) → clamping to"
+                f" {asr_infer_concurrency}"
+            )
+        else:
+            asr_infer_concurrency = env_infer
+
+    # Default backlog: one queued utterance per admitted session beyond the
+    # running ones. That is the deepest queue reachable when every client hits
+    # an endpoint at the same instant, so it never rejects a legitimate burst,
+    # and it is still bounded — unlike an unbounded await on a stalled
+    # backend.
+    if session_ceiling is None:
+        asr_queue_depth: Optional[int] = None
+    else:
+        asr_queue_depth = max(0, session_ceiling - asr_infer_concurrency)
+    env_depth = _parse_positive_int(
+        env_map.get("OVS_ASR_INFER_QUEUE_DEPTH"),
+        label="OVS_ASR_INFER_QUEUE_DEPTH",
+    )
+    if env_depth is not None:
+        asr_queue_depth = env_depth
+
     return ResolvedCapability(
         session_ceiling=session_ceiling,
         executor_max_workers=executor_max_workers,
@@ -471,6 +541,8 @@ def resolve(
         tts_cap=tts_cap,
         clamp_warnings=warnings,
         diar_cap=diar_cap,
+        asr_infer_concurrency=asr_infer_concurrency,
+        asr_queue_depth=asr_queue_depth,
     )
 
 
