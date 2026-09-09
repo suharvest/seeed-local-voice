@@ -94,13 +94,15 @@ def _with_optional_max_concurrent(
     The admission fields landed in voxedge after these builders shipped, so the
     product has to tolerate an older voxedge wheel on a device: passing an
     unknown keyword would TypeError at backend construction and take the whole
-    profile down. When the field is missing and a value above the built-in
-    default was asked for, say so — otherwise the knob looks wired up and
-    silently does nothing, which is the failure mode this guard exists for.
+    profile down. Whenever the field is missing and the requested value differs
+    from the built-in default — in EITHER direction — say so. A downward
+    request matters as much as an upward one: an operator lowering sherpa from
+    4 to 2 to leave the cores alone would otherwise get 4 with nothing in the
+    log, which is the failure mode this guard exists for.
     """
     if any(f.name == "max_concurrent" for f in dataclasses.fields(config_cls)):
         kwargs["max_concurrent"] = max_concurrent
-    elif max_concurrent > default:
+    elif max_concurrent != default:
         logger.warning(
             "%s: admission ceiling %d requested but this voxedge build has no "
             "max_concurrent field on %s — staying at %d slots",

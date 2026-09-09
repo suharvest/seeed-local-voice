@@ -94,8 +94,11 @@ def test_sherpa_tts_cpu_capability():
 
 
 def test_sherpa_asr_cpu_capability():
-    from voxedge.backends.sherpa.asr import SherpaASRBackend
-    cap = SherpaASRBackend.concurrency_capability()
+    # Instance method, not a classmethod: the cap now comes from
+    # SherpaASRConfig.max_concurrent so a deployment can size it against its
+    # own core count. __init__ loads no model, so a plain instance answers.
+    from voxedge.backends.sherpa.asr import SherpaASRBackend, SherpaASRConfig
+    cap = SherpaASRBackend(SherpaASRConfig()).concurrency_capability()
     assert cap.supports_parallel is True
     assert cap.max_concurrent == 4
     assert cap.requires_exclusive_device is False
