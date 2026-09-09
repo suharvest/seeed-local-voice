@@ -84,10 +84,12 @@ post_eos  +738.4 ms  final endpoint=vad  "Concorde."
 post_eos +2569.8 ms  final               "return to its place amidst the tents."
 ```
 
-The client kept `"Concorde."` and dropped the rest. Every matched item that
-differed from its c=1 text was a strict prefix of it, and joining all the
-finals reproduces the c=1 text exactly. The sweep below is rerun with the
-fixed client (`?vad=none`, all finals collected).
+The client kept `"Concorde."` and dropped the rest. `probe_frames.py`
+captured every frame of that c=24 run and of a c=1 run over the same items:
+of the 24 items common to both, 4 differed, each a strict prefix of its c=1
+text, and for all 4 the join of every final captured at c=24 equals the join
+of every final captured at c=1. The sweep below is rerun with the fixed
+client (`?vad=none`, all finals collected).
 
 Corpus: the same 72 LibriSpeech test-clean en items (CC BY 4.0) at every
 level, so every level is per-item comparable to c=1. Deployment: image

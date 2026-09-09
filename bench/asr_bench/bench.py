@@ -68,6 +68,11 @@ def load_items(segments_dir: Path, lang: str, category: str | None, limit: int |
     return items
 
 
+#: Cap on the gap between two server messages once the first final has
+#: arrived. Not applied before it, so a slow decode is not cut off.
+_IDLE_GAP_S = 5.0
+
+
 def load_pcm16(path: Path) -> bytes:
     audio, sr = sf.read(str(path), dtype="float32")
     if audio.ndim > 1:
@@ -209,21 +214,35 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
 
             eos_at = time.perf_counter()
             await ws.send(b"")  # empty frame = end-of-segment
-            # Read until the server closes the stream (it closes right after the
-            # EOS final) or goes idle, accumulating EVERY final. Returning on
-            # the first one silently dropped the rest of the utterance whenever
-            # the server had a queued mid-utterance final still to deliver.
+            # Read until the server closes the stream, accumulating EVERY
+            # final. The server closes right after the segment's EOS final, so
+            # the close is the completion signal — not the absence of an
+            # ``endpoint`` field, which a backend-driven midstream final
+            # (server/main.py, the get_partial is_endpoint path) also lacks.
+            # Returning on the first final silently dropped the rest of the
+            # utterance whenever the server had a queued mid-utterance final
+            # still to deliver.
             post_eos_finals: list[str] = []
             first_final_at = None
+            stream_closed = False
+            close_error = None
             deadline = eos_at + 40
-            idle_timeout = 5.0
+            # A gap cap, applied only once something has arrived. Before the
+            # first final the whole deadline is available, so a slow decode is
+            # not cut off at 5 s.
+            idle_timeout = _IDLE_GAP_S
             while time.perf_counter() < deadline:
-                budget = min(idle_timeout, max(0.1, deadline - time.perf_counter()))
+                remaining = max(0.1, deadline - time.perf_counter())
+                budget = min(idle_timeout, remaining) if first_final_at else remaining
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=budget)
                 except (asyncio.TimeoutError, TimeoutError):
                     break
-                except websockets.ConnectionClosed:
+                except websockets.ConnectionClosedOK:
+                    stream_closed = True
+                    break
+                except websockets.ConnectionClosed as exc:
+                    close_error = f"stream closed abnormally: {exc}"
                     break
                 try:
                     msg = json.loads(raw)
@@ -235,20 +254,23 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
                     first_final_at = time.perf_counter()
                 if msg.get("text"):
                     post_eos_finals.append(msg["text"])
-                # ``endpoint`` is present only on a server-VAD mid-utterance
-                # final; the segment's own EOS final has none and is last.
-                if not msg.get("endpoint"):
-                    break
             eos_to_final_ms = ((first_final_at or time.perf_counter()) - eos_at) * 1000
             joiner = "" if lang == "zh" else " "
             text = joiner.join([t for t in (*pre_eos_finals, *post_eos_finals) if t])
+            # Complete means the server sent at least one final AND closed the
+            # stream, which it does only after the segment's own EOS final.
+            complete = first_final_at is not None and stream_closed
             err = error_rate(ref, text, lang)
             rtf = (eos_to_final_ms / 1000.0) / duration_s if duration_s > 0 else float("nan")
             return SegmentResult(
                 id=item["id"], lang=lang, duration_s=duration_s,
                 feed_wall_ms=feed_wall_ms, eos_to_final_ms=eos_to_final_ms,
-                rtf=rtf, text=text, ref=ref, err=err, ok=first_final_at is not None,
-                error=None if first_final_at is not None else "no final message before deadline",
+                rtf=rtf, text=text, ref=ref, err=err, ok=complete,
+                error=None if complete else (
+                    close_error or (
+                        "no final message before deadline" if first_final_at is None
+                        else "server did not close the stream after EOS; the "
+                             "transcript may be incomplete")),
                 pre_eos_finals=len(pre_eos_finals),
             )
     except Exception as exc:  # noqa: BLE001 — record and continue, don't crash the run

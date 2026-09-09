@@ -128,18 +128,21 @@ scored that fragment as the whole segment.
 That is what the matched-item "shorter transcript at higher concurrency"
 finding previously recorded here measured. The mechanism was traced to the
 frame level on J4012 (`results/concurrency-orin-nx-ceiling.md`, Whisper
-section) using the same client, the same profile and the same corpus: every
-differing item was a strict prefix of its c=1 text, and joining all the finals
-reproduces the c=1 text exactly. With the fixed client, J4012 transcribes 0 of
-72 items differently at c=8, c=16 or c=24 than at c=1.
+section) using the same client, the same profile and the same corpus: of the
+24 items captured at both c=1 and c=24 there, the 4 that differed were each a
+strict prefix of the c=1 text, and for all 4 the join of every captured final
+matches between the two levels. With the fixed client, J4012 transcribes 0 of
+72 items differently at c=8, c=16 or c=24 than at c=1. J3011 has not been
+rerun, so the attribution here rests on that J4012 trace plus the fact that
+both boards ran the same client code.
 
 The J3011 table above was produced by the pre-fix client, so both its WER
 column and its latency column carry that behaviour: for a split utterance the
 client stopped reading at the first final, which is a different message than
 the segment's own. The accuracy-regression conclusion and the ceiling
-recommendation that rested on it are withdrawn. `bench.py` on `main` now pins
-`?vad=none` and accumulates every final; rerunning this board's sweep with it
-is what produces a J3011 Whisper ceiling.
+recommendation that rested on it are withdrawn. The `bench.py` change in this
+same commit pins `?vad=none` and accumulates every final; rerunning this
+board's sweep with it is what produces a J3011 Whisper ceiling.
 
 ## Files
 

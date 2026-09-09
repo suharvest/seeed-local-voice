@@ -30,10 +30,12 @@ import bench  # noqa: E402
 class _FakeWS:
     """Replays a scripted server frame sequence, recording the URL used."""
 
-    def __init__(self, frames_before_eos, frames_after_eos):
+    def __init__(self, frames_before_eos, frames_after_eos, closes=True, gap=0.0):
         self._before = list(frames_before_eos)
         self._after = list(frames_after_eos)
         self._eos_seen = False
+        self._closes = closes
+        self._gap = gap
 
     async def send(self, payload):
         if isinstance(payload, (bytes, bytearray)) and len(payload) == 0:
@@ -43,8 +45,11 @@ class _FakeWS:
         queue = self._after if self._eos_seen else self._before
         if not queue:
             if self._eos_seen:
-                raise bench.websockets.ConnectionClosed(None, None)
+                if self._closes:
+                    raise bench.websockets.ConnectionClosedOK(None, None)
+                await asyncio.sleep(3600)  # server never closes: exercise the gap cap
             await asyncio.sleep(3600)  # nothing queued pre-EOS: let the drain time out
+        await asyncio.sleep(self._gap)
         return json.dumps(queue.pop(0))
 
     async def __aenter__(self):
@@ -58,12 +63,12 @@ ITEM = {"id": "en_x", "filename": "x.wav", "lang": "en",
         "duration_s": 3.0, "transcript": "DO YOU SUPPOSE THE MINIATURE WAS A COPY"}
 
 
-def _run(monkeypatch, frames_before, frames_after, server_vad=False):
+def _run(monkeypatch, frames_before, frames_after, server_vad=False, closes=True, gap=0.0):
     seen = {}
 
     def fake_connect(url, **kw):
         seen["url"] = url
-        return _FakeWS(frames_before, frames_after)
+        return _FakeWS(frames_before, frames_after, closes=closes, gap=gap)
 
     monkeypatch.setattr(bench, "load_pcm16", lambda p: b"\x00\x00" * 16000)
     monkeypatch.setattr(bench.websockets, "connect", fake_connect)
@@ -132,3 +137,37 @@ def test_no_final_at_all_is_reported_as_an_error(monkeypatch):
     res, _ = _run(monkeypatch, [], [])
     assert not res.ok
     assert res.error == "no final message before deadline"
+
+
+def test_a_vad_final_without_the_eos_final_is_not_scored_as_complete(monkeypatch):
+    """The server split the utterance and never got to the EOS final. That is an
+    incomplete transcript, not a result: it must not be reported as ok."""
+    res, _ = _run(monkeypatch,
+                  [], [{"type": "final", "text": "Do you suppose the",
+                        "is_final": True, "endpoint": "vad"}],
+                  server_vad=True, closes=False)
+    assert not res.ok
+    assert "incomplete" in (res.error or "")
+
+
+def test_a_backend_midstream_final_does_not_end_collection(monkeypatch):
+    """server/main.py's get_partial is_endpoint path emits a final with no
+    ``endpoint`` field. Treating the missing field as "this is the EOS final"
+    would drop everything after it."""
+    after = [
+        {"type": "final", "text": "first half", "is_final": True},
+        {"type": "final", "text": "second half", "is_final": True},
+    ]
+    res, _ = _run(monkeypatch, [], after)
+    assert res.text == "first half second half"
+    assert res.ok
+
+
+def test_a_slow_first_final_is_not_cut_off_by_the_gap_cap(monkeypatch):
+    """The 5 s gap cap applies only after something has arrived; a decode that
+    takes longer than it to produce the first final must still be collected."""
+    monkeypatch.setattr(bench, "_IDLE_GAP_S", 0.05)
+    res, _ = _run(monkeypatch, [], [{"type": "final", "text": "slow", "is_final": True}],
+                  gap=0.2)
+    assert res.ok
+    assert res.text == "slow"
