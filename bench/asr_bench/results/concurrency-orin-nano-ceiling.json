@@ -17265,7 +17265,7 @@
       }
     ],
     "matched_item_confirmation": {
-      "description": "c=1 rerun against the identical 72-item corpus subset used at c=24 (fresh docker restart, effective_limit=64 reconfirmed), to distinguish corpus-composition effects from real concurrency-induced accuracy loss. c=4/c=8 show zero matched-item divergence from this baseline; c=16/c=24 show confirmed truncation defects on multiple matched items (see markdown for examples).",
+      "description": "c=1 rerun against the identical 72-item corpus subset used at the highest tested level (fresh docker restart, effective_limit=64 reconfirmed), to separate corpus-composition effects from real concurrency-associated score changes. c=4/c=8 show no per-item WER regression vs this baseline. Higher levels show reproducibly shorter collected transcripts for several matched items (see markdown for examples and the caveat on what mechanism this does/does not establish \u2014 bench.py returns on the first is_final after EOS, so a delayed/split final is not ruled out as an alternative to backend-side truncation).",
       "run": {
         "concurrency": 1,
         "segments": 72,

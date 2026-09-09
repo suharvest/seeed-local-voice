@@ -6,8 +6,9 @@ previously 1 (the installed `voxedge==0.0.13a0` package had no
 `max_concurrent` field on `WhisperASRConfig`); with a wheel built from
 `voxedge` `main` (466f3e4, unreleased) the ceiling now follows the profile
 and the real bottleneck is a serialized decode queue that, above c=8,
-produces confirmed audio truncation (not just added latency) — recommended
-ceiling 8, see the Whisper section below.
+produces reproducibly shorter collected transcripts for the same audio
+(not just added latency) — recommended ceiling 8, see the Whisper section
+below.
 
 ## SenseVoice (zh)
 
@@ -121,36 +122,47 @@ follow-up c=1 run against the identical 72-item corpus subset used at c=24,
 `docker restart` first, `effective_limit=64` reconfirmed), not inferred from
 the aggregate WER trend alone:
 
-- **c=4 and c=8 are clean**: every item shared with the c=1/72 baseline
-  (24 items at c=4, 40 at c=8) scores byte-identical `err` — zero
-  degradation at the levels this report recommends.
-- **c=16 and c=24 show real, confirmed defects**: 9 of the 64 items shared
-  with c=16, and multiple items at c=24, score sharply worse than their own
-  c=1 transcript for the *same audio*. Example (`en_pub_41`, ref "YET LITTLE
-  AS IT WAS IT HAD ALREADY MADE A VAST DIFFERENCE IN THE ASPECT OF THE
-  ROOM"): c=1 transcribes it in full ("Yet little as it was it had arisen.
-  already made a vast difference in the aspect of the room.",
-  `pre_eos_finals=3`) while the c=24 run for the identical segment returns
-  just `"Yet"` (`pre_eos_finals=0`) — the session finalizes early and
-  truncates the rest of the audio. Two more examples from the same
-  comparison: `en_pub_63` ("I had scarcely no what I had been saying or
-  doing..." at c=1 vs just "I had scarcely no" at c=24) and `en_pub_38`
-  ("Oh, let him come along she urged. I do love to see him about that old
-  house." at c=1 vs just "Oh, let him" at c=24). This is a real
-  concurrency-induced correctness defect (early finalization / truncation
-  under queueing pressure), not a corpus-composition artifact and not merely
-  slower-but-correct decoding.
+- **c=4 and c=8 show no per-item WER regression**: every item shared with
+  the c=1/72 baseline (24 items at c=4, 40 at c=8) scores the identical
+  `err` value it scored at c=1 — no item got worse at these levels. (Text
+  can still vary slightly at equal WER, e.g. `en_pub_35` drops a trailing
+  "air." at c=8 while scoring the same `err` because the reference word is
+  "PAIR." — so this is "no observed WER regression," not "byte-identical
+  transcripts.")
+- **c=16 and c=24 show real, reproducible score changes**: of the 64 items
+  shared with c=16, 9 score differently than at c=1 — 7 worse, 2 better
+  (`en_pub_31` improves 0.500 -> 0.375; `en_pub_62` improves 0.778 -> 0.667).
+  Several items at c=24 score sharply worse than their own c=1 transcript
+  for the *same audio*. Example (`en_pub_41`, ref "YET LITTLE AS IT WAS IT
+  HAD ALREADY MADE A VAST DIFFERENCE IN THE ASPECT OF THE ROOM"): c=1
+  transcribes it in full ("Yet little as it was it had arisen. already made
+  a vast difference in the aspect of the room.", `pre_eos_finals=3`) while
+  the c=24 run for the identical segment returns just `"Yet"`
+  (`pre_eos_finals=0`). Two more examples from the same comparison:
+  `en_pub_63` ("I had scarcely no what I had been saying or doing..." at
+  c=1 vs just "I had scarcely no" at c=24) and `en_pub_38` ("Oh, let him
+  come along she urged. I do love to see him about that old house." at c=1
+  vs just "Oh, let him" at c=24). What the client collects is a shorter
+  transcript at higher concurrency for the same audio — a real,
+  reproducible correctness regression, not corpus-composition and not
+  merely slower-but-correct decoding. The exact mechanism is **not**
+  confirmed: `bench.py` returns on the first `is_final` after the EOS
+  frame, so this rules out "same output, just slower" but cannot by itself
+  distinguish the backend actually truncating decode from a delayed/split
+  final message where later content was sent but not collected by this
+  client — that would need a message-level trace on the wire, not done
+  here.
 - The aggregate WER trend (3.62% at c=1 to 25.92% at c=24) is therefore a mix
   of both effects: some of the rise from c=1 to c=8 is corpus composition
   (larger `--limit` includes harder LibriSpeech items never tested at c=1,
   and those items score identically regardless of concurrency), but the
-  jump at c=16/c=24 includes a confirmed truncation defect on top of that,
+  jump at c=16/c=24 includes a real per-item score regression on top of that,
   isolated by the matched-item comparison above.
 
-**Recommended admission ceiling: 8** — the highest level tested that is
-confirmed clean on both latency (p95 under the 1.5 s bar) and accuracy (zero
-matched-item degradation vs the c=1 baseline); c=16 and above are confirmed
-unsafe on both axes, not just slow. c=32 was not run since c=16/c=24 already
+**Recommended admission ceiling: 8** — the highest level tested with no
+observed per-item WER regression vs the c=1 baseline and p95 under the 1.5 s
+bar; c=16 and above show both rising latency and a reproducible drop in
+matched-item transcript completeness. c=32 was not run since c=16/c=24 already
 established the ceiling has been passed by a wide margin on two independent
 measures.
 

@@ -6,8 +6,9 @@ board. Whisper's admission ceiling was previously 1 (the installed
 `voxedge==0.0.13a0` package had no `max_concurrent` field on
 `WhisperASRConfig`); with a wheel built from `voxedge` `main` (466f3e4,
 unreleased) the ceiling now follows the profile, and the sweep below finds a
-serialized-decode-queue ceiling of 8 — above that, confirmed audio
-truncation, not just added latency — the same recommendation as J3011.
+serialized-decode-queue ceiling of 8 — above that, reproducibly shorter
+collected transcripts for the same audio, not just added latency — the
+same recommendation as J3011.
 
 ## SenseVoice (zh)
 
@@ -106,31 +107,36 @@ the same way as J3011: a follow-up c=1 run against the identical 64-item
 corpus subset used at c=16 (`docker restart` first, `effective_limit=64`
 reconfirmed).
 
-- **c=4 and c=8 are clean**: every item shared with the c=1/64 baseline (24
-  items at c=4, 40 at c=8) scores byte-identical `err` — zero degradation at
-  the levels this report recommends.
-- **c=16 shows real, confirmed defects**: 11 of the 64 shared items score
-  differently at c=16 than at c=1 for the same audio. Example (`en_pub_22`,
-  ref "THEY WERE CERTAINLY NO NEARER THE SOLUTION OF THEIR PROBLEM"): c=1
-  transcribes the full sentence ("there were certainly no near the solution
-  of their problem.", `pre_eos_finals=1`) while c=16 for the identical
-  segment returns just `"there were certainly no"` (`pre_eos_finals=0`) —
-  the same early-finalization/truncation-under-queueing mechanism confirmed
-  on J3011. Two more matched examples: `en_pub_29` (c=1 gives a full two-
-  sentence transcript, c=16 cuts it after the first sentence) and
-  `en_pub_62` (c=1 includes a trailing "[BLANK_AUDIO]" tag that c=16's
-  earlier finalization drops). This confirms the defect is not board-
-  specific to J3011.
+- **c=4 and c=8 show no per-item WER regression**: every item shared with
+  the c=1/64 baseline (24 items at c=4, 40 at c=8) scores the identical
+  `err` value it scored at c=1 — no item got worse at these levels.
+- **c=16 shows real, reproducible score changes**: 11 of the 64 shared items
+  score differently at c=16 than at c=1 for the same audio (not all worse —
+  same mixed pattern as J3011). Example (`en_pub_22`, ref "THEY WERE
+  CERTAINLY NO NEARER THE SOLUTION OF THEIR PROBLEM"): c=1 transcribes the
+  full sentence ("there were certainly no near the solution of their
+  problem.", `pre_eos_finals=1`) while c=16 for the identical segment
+  returns just `"there were certainly no"` (`pre_eos_finals=0`). A second
+  matched example, `en_pub_29`, shows the same pattern: a full two-sentence
+  transcript at c=1, cut after the first sentence at c=16. (A third
+  candidate, `en_pub_62`, only differs by a dropped "[BLANK_AUDIO]" tag at
+  c=16 — that removes a non-reference token and slightly improves WER, not
+  an instance of lost speech content, so it is not cited as a truncation
+  example.) What the client collects is a shorter transcript at higher
+  concurrency for the same audio on this board too — the same pattern as
+  J3011, though independently confirmed only via these two examples here
+  (J3011's write-up has the fuller matched-pair analysis and the caveat on
+  what the truncation mechanism is and isn't established to be).
 - The aggregate WER trend (3.62% at c=1 to 16.07% at c=16) is therefore a
   mix of corpus composition (harder items entering at higher `--limit`,
   which score identically regardless of concurrency at c=4/c=8) and the
-  confirmed truncation defect that appears at c=16, isolated by the
+  score-regression pattern that appears at c=16, isolated by the
   matched-item comparison above.
 
-**Recommended admission ceiling: 8** — the highest level tested that is
-confirmed clean on both latency (p95 under the 1.5 s bar) and accuracy (zero
-matched-item degradation vs the c=1 baseline); c=16 is confirmed unsafe on
-both axes, not just slow, so c=24/c=32 were not run.
+**Recommended admission ceiling: 8** — the highest level tested with no
+observed per-item WER regression vs the c=1 baseline and p95 under the 1.5 s
+bar; c=16 shows both rising latency and the same matched-item transcript
+shortening seen on J3011, so c=24/c=32 were not run.
 
 
 ## Files
