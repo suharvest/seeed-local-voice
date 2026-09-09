@@ -8,11 +8,15 @@ production concurrency: 6.**
 Difference from the 20-segment pass in `results/harvest-pi.md`: that pass
 reported 0 errors and p95 865.7 ms at c=4 and 2280.2 ms at c=8 from only 20
 segments per level (5 per worker at c=4, 2.5 at c=8) — too few draws for a
-stable p95. This pass uses 100 segments per level (25 per worker at c=4, 8 at
-c=12/16), so c=8 is now measured error-free at p95 1722.8 ms, and c=12/16
-show the true admission-ceiling behavior (84/91 rejections) that the
-20-segment pass never reached because it used only 20 connections total,
-under the ceiling at every tested level.
+stable p95, and it only swept c=1/2/4/8, never reaching the 8-session
+admission ceiling from above. `bench.py`'s workers pull from one shared queue
+(`bench/asr_bench/bench.py:232-249`), so corpus size does not by itself
+determine how many sessions are open at once or how evenly segments split
+across workers; the reason c=12/c=16 show rejections here and not in the
+prior pass is that this pass is the first to test concurrency levels above
+the 8-session ceiling, not the larger corpus by itself. This pass uses 100
+segments per level (vs. 20), which does make the c=2..8 latency numbers more
+stable, and c=8 is now measured error-free at p95 1722.8 ms.
 
 ## Setup
 
@@ -22,7 +26,7 @@ under the ceiling at every tested level.
 | Image | `asrbench-rpi5-sensevoice:local`, rebuilt on-device from this repo's `deploy/docker/Dockerfile.rpi --target final-slim` (the image from the prior pass had been pruned for disk space; disk was 2.6 GB free before the rebuild, same as the prior report) |
 | Backend | `cpu.sherpa_asr` (sherpa-onnx `OfflineRecognizer.from_sense_voice`, `model.int8.onnx`, CPU provider), profile `rpi5-sensevoice` |
 | Streaming fix | `voxedge` bind-mounted from `/home/harvest/asrbench-pi/voxedge-src` over the image's installed wheel — routes the offline-only backend's `/asr/stream` through `OfflineAccumulateStream` (accumulate to `finalize()`), the same fix used in `results/harvest-pi.md` |
-| Admission | `OVS_MAX_CONCURRENT_SESSIONS=32` requested; the backend's own `concurrency_capability` clamped it to **8** (`session_limiter: OVS_MAX_CONCURRENT_SESSIONS=32 exceeds backend ceiling (asr=8,tts=inf) → clamping to 8`) — this is the board's own 4-core-times-2 ceiling declared by the CPU backend, not something this pass could raise |
+| Admission | `OVS_MAX_CONCURRENT_SESSIONS=32` requested; clamped to **8** (`session_limiter: OVS_MAX_CONCURRENT_SESSIONS=32 exceeds backend ceiling (asr=8,tts=inf) → clamping to 8`). This 8 is the `rpi5-sensevoice` profile's `asr_max_slots: 8` (`configs/profiles/rpi5-sensevoice.json:14`), which feeds `cpu.sherpa_asr`'s `concurrency_capability` via `SHERPA_ASR_MAX_CONCURRENT` (`server/core/voxedge_backend_config.py:299-318`, default 4, profile-overridable) — a configured value, not a value this codebase hardcodes; raising it would need a different profile or an env override, both out of scope for this bench-only pass |
 | Corpus | `bench/asr_bench/corpus` public AISHELL-1 zh subset rebuilt to 100 items (`download_public_corpus.py --limit 100`), vs. 20 in the prior pass |
 | Client | `bench/asr_bench/bench.py` from the Mac over Tailscale (`ws://100.116.230.60:8621`), `--api-key ""`, chunks fed at 1.0x real time |
 | Board state | Production containers already running on this device (`xiaozhi-server`, `home-assistant`, `mysql`, `mcp_face_rec`, etc.) were left untouched throughout — none were stopped or restarted; only the test container `asrbench-pi-ceil` was created and removed |
@@ -72,11 +76,19 @@ segments happened to win a connection slot first).
   c=8) then falls once requests start being rejected (0.97 at c=12, 0.89 at
   c=16) — rejected connections do no work, so aggregate throughput drops even
   though the 8 admitted slots keep decoding.
-- CER is flat at 5.12% from c=2 through c=8 (n=100 each), identical to the
-  single-session baseline in `results/harvest-pi.md` — concurrency changes
-  when an utterance is decoded, not what comes out, consistent with the
-  cat-remote finding.
-- This device's ceiling is admission-first: the CPU backend's own concurrency
-  cap (8) is reached before latency alone would force a lower number — c=8 is
-  already past the 1.5 s p95 bar, so raising the admission ceiling further
-  would not help even if the backend allowed it.
+- CER is flat at 5.12% from c=2 through c=8 (n=100 each) in this pass —
+  concurrency changes when an utterance is decoded, not what comes out,
+  consistent with the cat-remote finding. It differs from the single-session
+  baseline in `results/harvest-pi.md` (5.48%), which used a smaller,
+  different draw from the corpus (20 items vs. this pass's 100) — the two
+  numbers are not measuring the same sample and should not be read as a
+  match or a mismatch caused by concurrency.
+- The two limits found here are independent, not one causing the other: the
+  8-session admission ceiling (a profile setting, `asr_max_slots: 8`) and the
+  1.5 s latency bar (crossed between c=6 and c=8) both land at/near c=8 in
+  this test, but for different reasons — the admission ceiling is a
+  configuration choice, while the latency crossing is a measured CPU
+  contention effect. Recommending c=6 uses the latency bar, which is the
+  tighter of the two on this hardware; raising `asr_max_slots` past 8 would
+  not help, since c=8 already exceeds the 1.5 s target on latency grounds
+  alone.

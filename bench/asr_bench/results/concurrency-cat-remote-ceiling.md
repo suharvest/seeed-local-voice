@@ -7,15 +7,16 @@ Boundary: **p95 stays under 1.5 s through c=8 (1324.6 ms)**; c=12 crosses it
 keep up with real-time audio arrival). Zero errors at every level tested.
 **Recommended production concurrency: 8.**
 
-Difference from the 20-segment passes in `results/cat-remote-concurrency.md`
-and `results/cat-remote-multicore.md`: those reports measured this same
-2-core stage-a build at c=8 with only 20 segments (2.5 per worker) and got
-p95 1443.8 ms — close to this pass's 1324.6 ms at n=100, so that number holds
-up. But neither prior pass tested c=12/16/24 on the 2-core pool (the c=12/16
-numbers quoted in the task brief — p95 3619/5660 ms — are from a *different*
-build: the single-core "stageb" sentence-queue config, not this 2-core stage
-a pool). This pass is the first 2-core-pool measurement above c=8, and with
-100 segments per level it shows the 2-core pool holding p95 under 2.1 s
+Difference from the 20-segment pass in `results/cat-remote-multicore.md`:
+that report measured this same 2-core stage-a build at c=8 with only 20
+segments (2.5 per worker) and got p95 1443.8 ms — close to this pass's
+1324.6 ms at n=100, so that number holds up. But that pass did not test
+c=12/16/24 on the 2-core pool (the c=12/16 numbers quoted in the task brief —
+p95 3619/5660 ms — are from a *different* build: the single-core "stageb"
+sentence-queue config measured in `results/cat-remote-concurrency.md`, which
+reports 2733.0 ms at c=8 under serialized single-core inference, not this
+2-core pool). This pass is the first 2-core-pool measurement above c=8, and
+with 100 segments per level it shows the 2-core pool holding p95 under 2.8 s
 through c=16 before c=24 collapses — a materially different (better) ceiling
 than the single-core figures the task brief cited for c=12/16.
 
@@ -59,15 +60,24 @@ Core0 81%, peak Core1 79% — both cores load-bearing, consistent with the
 
 ### Reading
 
-- CER is 5.13% at every concurrency level — identical to the single-session
-  baseline, confirming queueing/parallel dispatch does not change decode
-  output on this backend.
+- CER is 5.13% at every concurrency level in this pass — flat across c=4
+  through c=24, confirming queueing/parallel dispatch does not change decode
+  output on this backend. It is not the same figure as the single-session
+  baselines in the prior 20-item reports (5.99% in `cat-remote-multicore.md`,
+  5.48% in `harvest-pi.md`) — those used a different, smaller draw from the
+  corpus, so the two numbers are not directly comparable; what this pass
+  establishes is that CER does not move with concurrency on a fixed 100-item
+  corpus, not that it matches an unrelated corpus draw.
 - Throughput keeps rising through c=24 (0.61 → 2.07 seg/s) but latency stops
   being a fair trade well before that: at c=24, RTF p50 crosses 1.0 (1.042),
-  meaning the median segment now takes longer to transcribe than its own
-  audio duration — the device is falling behind real-time arrival, not just
-  queueing. p95 at c=24 (6801.8 ms) is 4.1x the c=8 figure for roughly double
-  the throughput gain (1.17 → 2.07 seg/s, 1.8x).
+  meaning the median segment's response time (which includes queueing wait,
+  not just decode time — `bench.py` measures EOS-to-`is_final`) now exceeds
+  its own audio duration. That is evidence of response latency exceeding
+  real time under this test's load pattern (each worker waits for one
+  segment to finish before sending the next), not an independently
+  established claim about sustained live-arrival throughput. p95 at c=24
+  (6801.8 ms) is 5.1x the c=8 figure (1324.6 ms) for roughly double the
+  throughput gain (1.17 → 2.07 seg/s, 1.8x).
 - The c=8 → c=12 step is where p95 first crosses 1.5 s (1324.6 → 2016.3 ms,
   +52%) while throughput grows only 38% (1.17 → 1.61 seg/s) — the marginal
   latency cost per added session accelerates faster than the marginal
@@ -147,6 +157,14 @@ with a real sample is c=1 (n=76, WER 6.22%). Errors at c≥2 are
 `too_many_sessions` at connect time, the same admission-rejection pattern as
 SenseVoice's original single-core baseline and harvest-pi's c=12/16 rows
 above.
+
+**Accuracy caveat, separate from concurrency**: the single item that succeeded
+at c=8 and c=12 (`en_pub_00`, 3.5 s — well inside the 10 s window, so this is
+not the truncation effect described above) scored 87.5% WER with repeated
+text in the transcript. This is a per-item decode problem on this backend,
+not something the 9.5 s corpus filter explains or fixes; it is not evaluated
+further here since it is orthogonal to the concurrency question this pass
+measures.
 
 ### NPU occupancy
 
