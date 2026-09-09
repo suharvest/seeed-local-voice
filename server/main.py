@@ -7,6 +7,7 @@ import base64
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, JSONResponse, StreamingResponse
@@ -1048,6 +1049,29 @@ async def startup():
         _prof.get("execution_policy", {"mode": "concurrent"}),
         profile=_prof,
     )
+
+    # ASR inference gate: decouples "how many sessions are connected" from
+    # "how many ASR inferences run at once". Sized from the ASR backend's
+    # max_concurrent (in-flight inference ceiling), NOT from the session
+    # ceiling. On a single shared RKNN context this stays 1 while the session
+    # limiter admits N; per-utterance work then queues here in FIFO order
+    # instead of being rejected at connect time.
+    try:
+        from server.core.asr_infer_gate import init_asr_inference_gate
+        from server.core.capability_resolver import resolve as _resolve_cap
+        _rc = _resolve_cap(
+            profile=_prof,
+            policy=_prof.get("execution_policy"),
+        )
+        init_asr_inference_gate(
+            concurrency=_rc.asr_infer_concurrency,
+            max_waiting=_rc.asr_queue_depth,
+        )
+        _set_asr_sentence_level_locking(_rc)
+    except Exception:
+        logger.exception(
+            "ASR inference gate init failed; falling back to serial default"
+        )
 
     # Week 2: launch the GPU/NPU watchdog background task. Failures here
     # never block startup — the task is purely diagnostic.
@@ -5311,11 +5335,19 @@ async def asr_stream(
     try:
         if use_backend_stream:
             from server.core.coordinator import get_coordinator
-            async with get_coordinator().acquire("asr"):
+            if _asr_sentence_level_locking:
+                # Slot is taken per utterance inside _asr_stream_backend.
                 await _asr_stream_backend(
                     ws, asr_be, language, sample_rate, vad_session,
                     punct_on=punct_on, spk_on=spk_on, diarize_on=diarize_on,
+                    per_utterance_slot=True,
                 )
+            else:
+                async with get_coordinator().acquire("asr"):
+                    await _asr_stream_backend(
+                        ws, asr_be, language, sample_rate, vad_session,
+                        punct_on=punct_on, spk_on=spk_on, diarize_on=diarize_on,
+                    )
         else:
             await ws.send_json({"error": "no streaming ASR available"})
             await ws.close()
@@ -5341,6 +5373,167 @@ async def asr_stream(
         reset_request_context(_ws_ctx_tokens)
 
 
+# ---------------------------------------------------------------------------
+# Sentence-level ASR locking
+#
+# Before this, ``/asr/stream`` held the coordinator "asr" slot for the entire
+# WebSocket, so one connected client meant no other client could connect even
+# while the NPU sat idle between utterances. Sentence-level locking holds the
+# slot only around each utterance's finalize (the only place a shared-runtime
+# offline backend actually touches the NPU), and admits N sessions that queue
+# their per-utterance work in ``asr_infer_gate``.
+#
+# Backend-agnostic and opt-in: it engages whenever the resolver says more
+# sessions may be admitted than may be inside the ASR runtime at once, which a
+# backend expresses as ``supports_parallel=False`` with ``max_concurrent=N``.
+# A backend that declares nothing keeps 1:1 and the old connection-level lock,
+# so no existing deployment changes behaviour.
+#
+# What the slot covers is the finalize path only — the one place an
+# accumulate-then-transcribe backend touches its runtime. A backend that also
+# infers inside ``get_partial()`` (called on the event-loop thread, outside
+# the slot) must NOT declare max_concurrent > 1 with supports_parallel=False.
+# ---------------------------------------------------------------------------
+
+_asr_sentence_level_locking: bool = False
+
+
+def _set_asr_sentence_level_locking(resolved) -> None:
+    """Decide connection-level vs sentence-level locking once, at startup."""
+    global _asr_sentence_level_locking
+
+    cap = resolved.asr_cap
+    if resolved.coordinator_mode == "exclusive":
+        # ``exclusive`` is a residency contract: entering the slot unloads the
+        # opposite modality. Re-acquiring per utterance would thrash
+        # unload/preload on every sentence, so keep the connection-level hold.
+        _asr_sentence_level_locking = False
+    elif cap.max_concurrent is None:
+        # No fixed session cap. Only meaningful to gate when inference is
+        # serial; a parallel, uncapped backend (which is also what "no ASR
+        # backend declared" resolves to) has nothing to queue behind.
+        _asr_sentence_level_locking = not cap.supports_parallel
+    else:
+        # Gate whenever we admit more sessions than may be inside the runtime.
+        # Keyed on the RESOLVED in-flight limit, not on supports_parallel, so
+        # an operator lowering OVS_ASR_INFER_CONCURRENCY below the session
+        # count actually gets the queue rather than being silently ignored.
+        _asr_sentence_level_locking = (
+            cap.max_concurrent > resolved.asr_infer_concurrency
+        )
+    logger.info(
+        "ASR locking granularity: %s (asr sessions=%s, in-flight=%s, "
+        "queue depth=%s, mode=%s)",
+        "sentence" if _asr_sentence_level_locking else "connection",
+        cap.max_concurrent,
+        resolved.asr_infer_concurrency,
+        resolved.asr_queue_depth,
+        resolved.coordinator_mode,
+    )
+
+
+class _AsrSlotJobs:
+    """Executor futures started inside one utterance slot.
+
+    ``run_in_executor`` cannot cancel a thread that has already started. If the
+    handler task is cancelled (server shutdown, backend drain) the ``await``
+    raises at once while the worker is still inside the backend. Releasing the
+    inference slot there would hand the shared runtime to the next session on
+    top of a live inference. Recording the futures here lets the slot wait for
+    the worker before it releases.
+    """
+
+    __slots__ = ("futures",)
+
+    def __init__(self) -> None:
+        # concurrent.futures.Future, deliberately NOT the asyncio wrapper.
+        # Cancelling the awaiting coroutine marks the asyncio future CANCELLED
+        # even when the thread could not be stopped, so the wrapper reports
+        # done() while the worker is still running — it cannot tell us when the
+        # backend is free. The thread-pool future can.
+        self.futures: list = []
+
+    async def run(self, fn, *args):
+        cf = _get_asr_executor().submit(fn, *args)
+        self.futures.append(cf)
+        return await asyncio.wrap_future(cf)
+
+    async def drain(self) -> None:
+        pending = [f for f in self.futures if not f.done()]
+        self.futures.clear()
+        if not pending:
+            return
+        pending = [asyncio.wrap_future(cf) for cf in pending]
+        # ``shield`` keeps the wait itself from being cancelled again. Best
+        # effort: if the caller is cancelled a second time we re-raise rather
+        # than hang, which is the shutdown path where a second inference no
+        # longer matters.
+        try:
+            await asyncio.shield(
+                asyncio.gather(*pending, return_exceptions=True)
+            )
+        except asyncio.CancelledError:
+            logger.warning(
+                "ASR slot: cancelled while waiting for an in-flight inference "
+                "to finish; releasing the slot with a worker still running"
+            )
+
+
+async def _send_asr_busy(ws, reason: str) -> None:
+    """Tell the client this utterance was dropped for backpressure.
+
+    Distinct from an error: the session stays open and the next utterance is
+    processed normally. Clients that ignore the frame simply see a missing
+    final, which is the same outcome as before but without the server growing
+    an unbounded inference backlog.
+    """
+    try:
+        await ws.send_json({
+            "type": "busy",
+            "reason": "asr_queue_full",
+            "endpoint": reason,
+        })
+    except Exception:
+        logger.debug("ASR busy notice send failed (client gone)", exc_info=True)
+
+
+@asynccontextmanager
+async def _asr_no_slot(jobs: "_AsrSlotJobs"):
+    """No-op slot: the caller already holds the connection-level lock.
+
+    Still drains ``jobs``, so a cancelled handler does not return to the
+    caller — which then releases the connection-level lock — while a worker
+    thread is still inside the backend.
+    """
+    try:
+        yield 0.0
+    finally:
+        await jobs.drain()
+
+
+@asynccontextmanager
+async def _asr_utterance_slot(jobs: "_AsrSlotJobs"):
+    """Hold the ASR execution slot for exactly one utterance's inference.
+
+    Gate first (bounded, rejects with ``InferenceQueueFull`` when the backlog
+    is full), coordinator lock second (unbounded ``asyncio.Lock``). That order
+    matters: it is what keeps the backlog bounded. With the gate at
+    concurrency=1 at most one ASR task can ever be parked on the coordinator
+    lock, so the unbounded wait is never reachable from this path.
+    """
+    from server.core.asr_infer_gate import get_asr_inference_gate
+    from server.core.coordinator import get_coordinator
+
+    async with get_asr_inference_gate().acquire() as waited:
+        async with get_coordinator().acquire("asr"):
+            try:
+                yield waited
+            finally:
+                # Release only once the executor worker has actually left the
+                # backend — see _AsrSlotJobs.
+                await jobs.drain()
+
+
 async def _asr_stream_backend(
     ws: WebSocket,
     asr_be,
@@ -5350,6 +5543,7 @@ async def _asr_stream_backend(
     punct_on: bool = False,
     spk_on: bool = False,
     diarize_on: bool = False,
+    per_utterance_slot: bool = False,
 ):
     """Streaming ASR using ASR backend (accumulate-then-transcribe).
 
@@ -5366,6 +5560,19 @@ async def _asr_stream_backend(
     import numpy as np
 
     from server.core import diarization as _diar_mod_be
+    from server.core.asr_infer_gate import InferenceQueueFull
+
+    # ``per_utterance_slot``: the caller did NOT take the coordinator slot for
+    # the connection, so each finalize below must take it (plus the bounded
+    # inference gate) for the duration of that one utterance's inference. When
+    # False the caller holds the slot for the whole connection and the slot
+    # context manager here is a no-op — identical to the pre-change code path.
+    _slot_cm = _asr_utterance_slot if per_utterance_slot else _asr_no_slot
+
+    def _slot():
+        """One utterance's slot, with a fresh executor-job tracker."""
+        jobs = _AsrSlotJobs()
+        return _slot_cm(jobs), jobs
 
     stream = asr_be.create_stream(language=language)
     logger.info("ASR stream opened (backend=%s)", asr_be.name)
@@ -5427,13 +5634,37 @@ async def _asr_stream_backend(
                 elif cmd.get("command") == "end_utterance" or (cmd.get("type") or "").lower() == "eou":
                     _loop = asyncio.get_event_loop()
                     force_endpoint = getattr(stream, "force_endpoint", None)
-                    if force_endpoint is not None:
-                        final_text = await _loop.run_in_executor(_get_asr_executor(), force_endpoint)
-                        detected_language = None
-                    else:
-                        await _loop.run_in_executor(_get_asr_executor(), stream.prepare_finalize)
-                        raw_final = await _loop.run_in_executor(_get_asr_executor(), stream.finalize)
-                        final_text, detected_language = _unpack_finalize_result(raw_final)
+                    _cm, _jobs = _slot()
+                    try:
+                        async with _cm:
+                            if force_endpoint is not None:
+                                final_text = await _jobs.run(force_endpoint)
+                                detected_language = None
+                            else:
+                                await _jobs.run(stream.prepare_finalize)
+                                raw_final = await _jobs.run(stream.finalize)
+                                final_text, detected_language = _unpack_finalize_result(raw_final)
+                    except InferenceQueueFull:
+                        # Same cleanup as the VAD rejection path: without it the
+                        # rejected audio stays in the stream and in _seg, and
+                        # the next successful final would splice two utterances
+                        # together (and the buffer would keep growing under
+                        # sustained overload).
+                        await _send_asr_busy(ws, "end_utterance")
+                        try:
+                            _old_close = getattr(stream, "close", None)
+                            if _old_close is not None:
+                                _old_close()
+                        except Exception:
+                            logger.exception("ASR busy re-arm: stream close raised")
+                        stream = asr_be.create_stream(language=language)
+                        _seg.clear()
+                        if vad_session is not None:
+                            try:
+                                vad_session.reset()
+                            except Exception:
+                                logger.debug("VAD reset after busy raised", exc_info=True)
+                        continue
                     payload = {
                         "type": "final",
                         "text": final_text,
@@ -5470,8 +5701,14 @@ async def _asr_stream_backend(
             if len(data) == 0:
                 # End of audio — pre-encode tail, then decode
                 _loop = asyncio.get_event_loop()
-                await _loop.run_in_executor(_get_asr_executor(), stream.prepare_finalize)
-                raw_final = await _loop.run_in_executor(_get_asr_executor(), stream.finalize)
+                _cm, _jobs = _slot()
+                try:
+                    async with _cm:
+                        await _jobs.run(stream.prepare_finalize)
+                        raw_final = await _jobs.run(stream.finalize)
+                except InferenceQueueFull:
+                    await _send_asr_busy(ws, "eos")
+                    break
                 final_text, detected_language = _unpack_finalize_result(raw_final)
                 payload = {
                     "type": "final",
@@ -5514,8 +5751,29 @@ async def _asr_stream_backend(
                     # Emit vad_endpoint BEFORE finalize so the client can split
                     # VAD silence-wait from ASR compute time.
                     await ws.send_json({"type": "vad_endpoint"})
-                    await _loop.run_in_executor(_get_asr_executor(), stream.prepare_finalize)
-                    raw_final = await _loop.run_in_executor(_get_asr_executor(), stream.finalize)
+                    _cm, _jobs = _slot()
+                    try:
+                        async with _cm:
+                            await _jobs.run(stream.prepare_finalize)
+                            raw_final = await _jobs.run(stream.finalize)
+                    except InferenceQueueFull:
+                        # Backlog full: drop this utterance rather than grow an
+                        # unbounded queue. Re-arm the stream/VAD exactly as the
+                        # success path does so the session stays usable.
+                        await _send_asr_busy(ws, "vad")
+                        try:
+                            _old_close = getattr(stream, "close", None)
+                            if _old_close is not None:
+                                _old_close()
+                        except Exception:
+                            logger.exception("ASR busy re-arm: stream close raised")
+                        stream = asr_be.create_stream(language=language)
+                        _seg.clear()
+                        try:
+                            vad_session.reset()
+                        except Exception:
+                            logger.debug("VAD reset after busy raised", exc_info=True)
+                        continue
                     final_text, detected_language = _unpack_finalize_result(raw_final)
                     try:
                         payload = {
