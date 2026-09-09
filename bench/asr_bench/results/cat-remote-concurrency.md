@@ -62,10 +62,32 @@ Zero errors at every level. No `busy` frame was emitted: with 8 sessions and a
 queue depth of 7, a simultaneous endpoint on all of them fills the queue
 exactly without overflowing it.
 
+## Repeat runs after the review fixes
+
+The review round (see the PR) changed how the executor future is held. Three
+further passes with the fixed files mounted, same device, same corpus:
+
+| run | c | OK/20 | p50 (ms) | p95 (ms) | CER |
+|---|---|---|---|---|---|
+| post-fix A | 1 | 20 | 942.6 | 1273.2 | 0.0599 |
+| post-fix A | 4 | 20 | 1285.3 | 3743.4 | 0.0599 |
+| post-fix B | 4 | 20 | 1053.6 | 1915.1 | 0.0599 |
+| post-fix C | 4 | 20 | 977.8 | 1259.3 | 0.0599 |
+
+Four c=4 measurements now exist: **1346.9, 3743.4, 1915.1, 1259.3 ms**. The
+spread is 3.0x at n=20 segments per run, so a single p95 at this concurrency
+does not support a conclusion by itself. Every run transcribed 20/20 with
+CER 0.0599.
+
 ## Reading
 
-- **p95 ≤ 1.5 s holds through c=4** (1346.9 ms) and breaks at c=8 (2733.0 ms).
-  Max supported N on this device by that bar: **4**.
+- **c=2 is comfortably inside p95 ≤ 1.5 s** (1219.4 ms).
+- **c=4 is borderline**: p95 landed at 1259-3743 ms across four runs, under the
+  bar in two of them. Deploying at 4 needs either a tighter measurement (more
+  segments per run, device-local client) or acceptance of a p95 that sometimes
+  doubles.
+- **c=8 is out** (2733.0 ms, and that was the single most favourable of the
+  latency samples at this concurrency).
 - Throughput scales 0.15 → 0.87 seg/s, 5.8x from c=1 to c=8, on hardware whose
   in-flight inference count never left 1. The headroom was queueing, not
   compute.
