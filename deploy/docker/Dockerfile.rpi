@@ -100,6 +100,65 @@ EXPOSE 8000
 
 CMD ["python3", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+# ── final-hailo: Whisper encoder on the Hailo-8 NPU ─────────────────────────
+#
+# reComputer R2000 series (Raspberry Pi 5 + Hailo-8). Adds the HailoRT Python
+# bindings on top of `base` so `hailo.whisper` can run: the encoder is a
+# prebuilt .hef on the NPU, the decoder stays an ONNX KV-cache graph on the CPU
+# (onnxruntime is already installed in `base`).
+#
+# Three constraints, all of them load-bearing:
+#
+#   1. `libhailort.so.<version>` is NOT baked in. `_pyhailort` records it as a
+#      versioned SONAME dependency (`libhailort.so.4.21.0` for the 4.21.0
+#      wheel) and it has to match the PCIe driver the host kernel loaded, so it
+#      is bind-mounted from the host at run time. Baking a copy would make the
+#      image silently wrong on any board running a different HailoRT. Mounting
+#      the versioned file alone is enough — no unversioned `.so` link and no
+#      LD_LIBRARY_PATH entry are needed, since /usr/lib is already on glibc's
+#      default search path.
+#   2. The wheel is operator-supplied under `deploy/docker/wheels/` (Hailo
+#      Developer Zone, login-gated; not on PyPI). See that directory's README
+#      for the version-matching check.
+#   3. gcc/python3-dev are installed and removed again in one layer: hailort
+#      pulls in netifaces, which resolves to a source distribution here
+#      (netifaces-0.11.0.tar.gz) and is compiled during the install.
+#
+# Build (from repo root, on the board or any arm64 host):
+#   docker build -f deploy/docker/Dockerfile.rpi --target final-hailo \
+#     --build-arg HAILORT_WHEEL=hailort-4.21.0-cp311-cp311-linux_aarch64.whl \
+#     -t openvoicestream:rpi-hailo .
+#
+# Run (/dev/hailo0 is exclusive to one process — stop other Hailo containers):
+#   docker run --device /dev/hailo0 \
+#     -v /usr/lib/libhailort.so.4.21.0:/usr/lib/libhailort.so.4.21.0:ro \
+#     -v ~/models:/opt/models -p 8621:8000 \
+#     -e OVS_PROFILE=rpi5-hailo-whisper -e HF_ENDPOINT=https://hf-mirror.com \
+#     openvoicestream:rpi-hailo
+FROM base AS final-hailo
+
+ARG HAILORT_WHEEL=hailort-4.21.0-cp311-cp311-linux_aarch64.whl
+COPY deploy/docker/wheels/ /tmp/wheels/
+RUN test -f /tmp/wheels/${HAILORT_WHEEL} || { \
+        echo "missing deploy/docker/wheels/${HAILORT_WHEEL} — see that directory's README"; \
+        exit 1; } \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        gcc python3-dev libc6-dev \
+    && pip3 install --no-cache-dir --break-system-packages \
+        --index-url ${PIP_INDEX_URL} /tmp/wheels/${HAILORT_WHEEL} \
+    && apt-get purge -y --auto-remove gcc python3-dev libc6-dev \
+    && rm -rf /tmp/wheels /root/.cache/pip /var/lib/apt/lists/*
+
+# The Whisper path is ASR-only and downloads its own artifacts (the .hef, the
+# ONNX decoder pair, vocab + mel filters) into $MODEL_DIR/whisper. The sherpa
+# offline-ASR fetch that `base` enables would pull SenseVoice for a backend
+# this image does not run, so it is turned off here.
+ENV OVS_PROFILE_DEFAULT=rpi5-hailo-whisper \
+    ENSURE_OFFLINE_ASR=0
+
+LABEL org.opencontainers.image.title="OpenVoiceStream (Raspberry Pi 5 + Hailo-8)" \
+      org.opencontainers.image.description="Whisper ASR with the encoder on Hailo-8, decoder on CPU"
+
 # ── Multi-target stages (no baked artifacts; thick == slim == base) ─────────
 FROM base AS final-thick
 FROM base AS final-slim

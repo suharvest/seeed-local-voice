@@ -20,6 +20,28 @@ plus the seeed commit. Rebuild the wheel from the recorded voxedge commit
 | `jetson-jp62-trt103-edgellm-v091-vox0011a0-20260818` | `13383c8` | `voxedge==0.0.11a0` | 2026-08-18 | spark | `sha256:2e3752dea4b9a7c3993229caa063e3746f48476d9b436eca6f35cdd4c3685070` |
 | `rk-20260903.10` | `2a3cabbfdc8507e6058ae85e09803e1442621b20` + receipt-bound overlays | `0.0.12a0+kokoro.20260903.1` | 2026-09-03 | RK3576/RK3588 | `sha256:fdc480da30610f46075f41a8bf95be5774427a98d3e77c69272cdec1226593c1` |
 | `rk-20260909` | `c34af54` + this branch's two `Dockerfile.rk` build fixes | `0.0.13a0` | 2026-09-09 | spark | `sha256:184e9336847a6a0c246c94b311b11d0379d4c90366b8ea0ad6afa0a688b91a58` |
+| `rpi-hailo` (local, not pushed) | `4d66f475` + `final-hailo` stage | `0.0.12a0` baked | 2026-09-09 | harvest-pi | `sha256:f6d9bf16557a3a561968e2c942cfcc13112489faafe667a1df95bf5bc4700f65` (local image ID, 657 MB) |
+
+`rpi-hailo` — `Dockerfile.rpi --target final-hailo`, built on `harvest-pi`
+(reComputer R2000 series) and tagged locally `asrbench-rpi5-hailo-whisper:r2000`
+for the bench in `bench/asr_bench/results/concurrency-harvest-pi-ceiling.md`.
+Not pushed to the registry, so the digest above is the local image ID.
+The bench numbers were taken on its predecessor
+`sha256:2c5069e425585aa73eb7be210fd24587e2884fb401d78b16de9391c8df69726d`,
+which differs only by an extra `LD_LIBRARY_PATH=/usr/lib`; that was dropped
+after checking that `import hailo_platform` resolves `libhailort.so.4.21.0`
+from the bind-mount without it. It is
+not reproducible from a clean clone by itself: the stage needs the
+operator-supplied HailoRT wheel described in `deploy/docker/wheels/README.md`
+(here `hailort-4.21.0-cp311-cp311-linux_aarch64.whl`, md5
+`2fde57f853ea66d670a60e68b4ca15da`), and it bind-mounts the host's matching
+`libhailort.so.4.21.0` at run time.
+
+The voxedge column is the image's baked `VOXEDGE_VERSION` default (0.0.12a0).
+The bench run that produced
+`bench/asr_bench/results/concurrency-harvest-pi-ceiling.md` installed
+voxedge 0.0.13a0 into the running container over that wheel; the image itself
+does not carry it.
 
 `rk-20260909` — `--target final-slim`, pushed to both
 `sensecraft-missionpack.seeed.cn/solution/openvoicestream:rk-20260909` and
