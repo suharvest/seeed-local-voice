@@ -433,7 +433,7 @@ def test_new_models_present(registry):
 @pytest.mark.parametrize("leaf_id,expected_substr", [
     (PARAFORMER_TRT, "paraformer_encoder_dp4_400.plan"),
     (SENSEVOICE_TRT, "sense-voice-encoder.scaled.fixed.onnx"),
-    (SENSEVOICE_RKNN_3588, "sense-voice-encoder.rk3588.fp16-scaled.rknn"),
+    (SENSEVOICE_RKNN_3588, "sense-voice-encoder.rk3588.fp16-scaled.t172.rknn"),
     (SENSEVOICE_SHERPA_RPI5, "sensevoice/model.int8.onnx"),
     (QWEN3_ASR_RK_3576_W8A8, "decoder_qwen3.w8a8.rk3576.rkllm"),
     (QWEN3_ASR_RK_3576_W4A16, "decoder_qwen3.w4a16_g128.rk3576.rkllm"),
