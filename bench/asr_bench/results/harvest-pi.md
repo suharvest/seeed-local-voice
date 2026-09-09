@@ -10,7 +10,7 @@ corpus at concurrency 1/2/4/8.
 
 | Backend | Lang | Endpoint used | Result |
 |---|---|---|---|
-| SenseVoice (`cpu.sherpa_asr`, profile `rpi5-sensevoice`) | zh | `/asr` (offline, multipart) — **not** `/asr/stream` | Measured, see below |
+| SenseVoice (`cpu.sherpa_asr`, profile `rpi5-sensevoice`) | zh | `/asr/stream` (WebSocket) at c=1/2/4/8 | Measured, see below |
 | Whisper (`hailo.whisper`, profile `rpi5-hailo-whisper`) | en | — | **Not run — no buildable container exists for this backend on this device (see Blockers)** |
 
 ## Blocker 1: no rpi image exists with the current profile system
@@ -49,53 +49,90 @@ outside this dispatch's scope (`--sudo`/new-abstraction guardrail) — **the
 Whisper/Hailo leg of this task is blocked on that missing Dockerfile, not on
 anything device-specific**, and was not attempted.
 
-## Blocker 2: SenseVoice cannot be served over `/asr/stream` at all — architectural, not a config bug
+## SenseVoice over `/asr/stream`: what was broken, what fixed it
 
-The dispatch's own bench tool (`bench.py`) only targets `/asr/stream`
-(WebSocket). Running it against the freshly-built `rpi5-sensevoice`
-container produced **100% errors at every concurrency level** (see
-`harvest-pi-sensevoice-zh-stream-FAILED.json`): server accepts the
-WebSocket then immediately sends `{"error": "no streaming ASR available"}`
-and closes (code 1000).
+The first pass on this device produced **100% errors at every concurrency
+level**: the server accepted the WebSocket, sent
+`{"error": "no streaming ASR available"}` and closed with code 1000.
 
-Root cause, traced to source (not guessed):
+Root cause, traced to source:
 
-- `server/main.py:5167` `/asr/stream` gates on
-  `asr_be.has_capability(ASRCapability.STREAMING)` (`server/main.py`
-  ~line 5266-5270); if false it sends the error and closes
-  (`server/main.py` ~line 5320-5321).
-- `voxedge/backends/sherpa/asr.py` `SherpaASRBackend.capabilities`
-  (line ~283-290) only reports `STREAMING` when its **online** (Paraformer)
-  recognizer loaded; `create_stream()` (line 331) — the only thing
-  `/asr/stream` can call — **raises if the online recognizer is None** and
-  has no path to the offline SenseVoice recognizer at all.
-  `transcribe()` (line 350, offline/SenseVoice) is wired only to the
-  non-streaming `POST /asr` endpoint (`server/main.py:4940`).
-- The `rpi5-sensevoice` profile deliberately does not fetch
-  `paraformer-streaming` (`server/core/model_downloader.py`'s
-  `_BUNDLE_MODEL_BACKEND` gate suppresses it unless
-  `asr_backend == jetson.paraformer_trt`), so on this profile the online
-  recognizer never loads and `STREAMING` capability is never present.
+- `server/main.py` gates `/asr/stream` on
+  `asr_be.has_capability(ASRCapability.STREAMING)`; when false it sends that
+  error and closes.
+- `voxedge/backends/sherpa/asr.py` reported `STREAMING` only when its
+  **online** (Paraformer) recognizer had loaded, and `create_stream()` — the
+  only entry point `/asr/stream` has — raised whenever that recognizer was
+  `None`, with no path to the offline SenseVoice recognizer. `transcribe()`
+  reached the offline recognizer, but only `POST /asr` calls it.
+- `rpi5-sensevoice` does not fetch `paraformer-streaming`
+  (`server/core/model_downloader.py`'s `_BUNDLE_MODEL_BACKEND` gate suppresses
+  it unless `asr_backend == jetson.paraformer_trt`), so on this profile the
+  online recognizer never loads:
 
-In other words: on this backend, SenseVoice **only ever serves the offline
-`POST /asr` endpoint** — never `/asr/stream` — no matter what env vars or
-profile overrides are set. This is true for any device using
-`cpu.sherpa_asr` (not just this Pi). The `rpi5-sensevoice` profile's own
-description text ("SenseVoice serves the offline /asr path; streaming
-Paraformer also loads for /asr/stream") already says this — it was not
-mentioned in the task brief and the mismatch with `bench.py`'s fixed target
-was not caught before dispatch.
+  ```
+  [INFO] voxedge.backends.sherpa.asr: Streaming ASR not available: /opt/models/paraformer-streaming/tokens.txt does not exist
+  [INFO] voxedge.backends.sherpa.asr: Sherpa offline ASR loaded
+  ```
 
-**What was measured instead**: rather than report zero data, the same
-running container's `/asr` (offline, multipart upload) endpoint was
-benchmarked with a small ad-hoc script
-(`offline_asr_bench.py`, not committed — kept out-of-repo since it is a
-stopgap, not a permanent tool) that reuses the same corpus manifest and the
-same `jiwer` CER logic as `bench.py`, at the same concurrency levels. This
-is the real SenseVoice engine, same container, same corpus — just the
-correct endpoint for this backend.
+**Fix** (voxedge `fix/sherpa-offline-stream`): route the offline-only case
+through the generic `OfflineAccumulateStream`, the same adapter
+`jetson/sensevoice_trt.py` and `whisper/asr.py` already use — accumulate the
+utterance, transcribe on `finalize()`, endpointing from the server-side VAD.
+`create_stream()` still prefers a native online recognizer when one is
+loaded, so existing sherpa deployments are unchanged. The results below were
+measured with that fix in place; the profile description in
+`configs/profiles/rpi5-sensevoice.json` was corrected in the same pass (it
+claimed streaming Paraformer also loads here, which it does not).
 
-## SenseVoice zh results (`POST /asr`, 20-item AISHELL-1 subset)
+## SenseVoice zh results (`/asr/stream`, 20-item AISHELL-1 subset)
+
+Container: `Dockerfile.rpi --target final-slim`, profile `rpi5-sensevoice`
+(`max_concurrent_sessions=8`, `asr_max_slots=8`), model
+`sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx`
+(239 233 841 bytes, CPU provider). Corpus and CER logic identical to the
+`radxa` (RK3588) SenseVoice pass, so the CER numbers are directly comparable.
+Latency = audio-end → `is_final`; RTF = that latency / audio duration.
+
+| c | OK | Err | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | CER |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 20/20 | 0 | 641.5 | 856.8 | 0.106 | 0.115 | 0.15 | 5.48% |
+| 2 | 20/20 | 0 | 622.3 | 824.3 | 0.103 | 0.117 | 0.30 | 5.48% |
+| 4 | 20/20 | 0 | 620.1 | 865.7 | 0.105 | 0.117 | 0.58 | 5.48% |
+| 8 | 20/20 | 0 | 851.5 | 2280.2 | 0.125 | 0.274 | 1.00 | 5.48% |
+
+`results/harvest-pi-sensevoice-zh-stream.{json,md}`. Throughput rises with
+concurrency but sublinearly: 0.152 / 0.302 / 0.578 / 1.000 seg/s, i.e. x1.00,
+x1.98, x3.80, x6.57 against c=1. p50 latency is flat through c=4; at c=8 —
+twice the core count — p50 rises 33% and p95 2.7x while every request still
+completes: the extra time is waiting, not rejection — no level returned an
+error. The benchmark does not identify where inside the stack that wait
+happens. CER is
+identical at every level, as expected from a deterministic model on a fixed
+corpus.
+
+`top -b -d 1` sampled through the sweep (`harvest-pi-top.log`, 251 samples).
+The server process peaked at **336% CPU** of the board's 400% during the c=8
+burst; at c=1 the machine sits near idle between utterances, consistent with
+RTF 0.106.
+
+### Concurrent-decode safety
+
+Before raising the ceiling, one shared `OfflineRecognizer` was decoded from
+several threads at once inside the same container — 6 clips per thread, every
+clip decoded concurrently, compared against a serial baseline:
+
+```
+MODEL_FILE /opt/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx 239233841 bytes
+SERIAL_OK 6
+THREADS=2 elapsed=3.74s errors=0 mismatches=0
+THREADS=4 elapsed=11.21s errors=0 mismatches=0
+```
+
+No exceptions, no transcript differences — so the backend keeps
+`supports_parallel=True` with no added lock.
+
+## Earlier pass: SenseVoice zh over `POST /asr`
 
 This is the same 20-item AISHELL-1 subset (`bench/asr_bench/corpus/manifest.json`)
 used in the `radxa` (RK3588) report's SenseVoice pass
@@ -123,9 +160,10 @@ holds sample size constant (n=20 or n=4 per level).
 
 ### Pass 2 — `execution_policy.mode` re-check: profile pin loosened
 
-Per `configs/profiles/rpi5-sensevoice.json`'s own description
-("`max_concurrent_sessions` is pinned to 1... the declared ceiling is not
-safe here until it is measured") and `execution_policy.mode: "concurrent"`
+Per the `configs/profiles/rpi5-sensevoice.json` description **as it read at
+the time** ("`max_concurrent_sessions` is pinned to 1... the declared ceiling
+is not safe here until it is measured"; the current description says
+something else) and `execution_policy.mode: "concurrent"`
 (not `serialized` — this is a defensive software cap, not a hardware
 exclusivity lock like the RK NPU or Hailo device), the container was
 restarted with `OVS_MAX_CONCURRENT_SESSIONS=8`. The session limiter clamped
@@ -160,24 +198,30 @@ is consistent with normal item-to-item variance in this corpus rather than
 a concurrency-driven accuracy loss, but the sample is too small to rule
 that out.
 
-**Conclusion for SenseVoice on this device**: concurrency 1 is the safe
-default (server-pinned); concurrency up to 4 works with linear latency
-degradation and no accuracy loss if `OVS_MAX_CONCURRENT_SESSIONS` is raised;
-concurrency 8 is rejected by the backend's own declared ceiling, not by a
-hardware limit — this is a software policy question (how much CPU
-contention is acceptable), not a "does not support concurrency" hard
-failure like the RK3576 NPU or Hailo device exclusivity cases.
+**Conclusion drawn at the time, under the then-current configuration**
+(`max_concurrent_sessions=1`, backend ceiling 4): concurrency 1 was the
+server-pinned default; up to 4 worked with linear latency degradation and no
+accuracy loss once `OVS_MAX_CONCURRENT_SESSIONS` was raised; 8 was rejected by
+the backend's declared ceiling, not by a hardware limit — a software policy
+question, not a "does not support concurrency" failure like the RK3576 NPU or
+Hailo device exclusivity cases.
+
+**Superseded.** The profile now declares `max_concurrent_sessions=8` /
+`asr_max_slots=8`, and the `/asr/stream` sweep above completes 20/20 at c=8
+with no rejections. The latency figures in this section are also not
+comparable with the streaming ones: they were taken through a different
+endpoint and a different admission setting.
 
 ## Resource sampling
 
-`resource_sampler.py` was pushed to the device
-(`/home/harvest/asrbench-pi/resource_sampler.py`) but **not run
-concurrently with the sweep** — disk headroom was critical for most of this
-session (see below) and the sweep itself completed inside the fleet-exec
-step budget without it. No CPU/mem/temp time series was captured for this
-pass; only `hailortcli monitor` availability was confirmed
-(`hailortcli` 4.21.0 present on host, used by other containers) — it was
-not exercised since the Whisper/Hailo leg did not run.
+`top -b -d 1` ran alongside the `/asr/stream` sweep; the series is
+`harvest-pi-top.log` (251 samples). Peak was 336% CPU of the board's 400%
+during the c=8 burst. `hailortcli` (4.21.0) is present on the host and used
+by other containers, but was not exercised — the Whisper/Hailo leg did not
+run and `/dev/hailo0` was never opened by this session.
+
+The earlier `POST /asr` passes have no CPU series: `resource_sampler.py` was
+pushed to the device but not run concurrently with them.
 
 ## Disk-space handling
 
@@ -192,24 +236,25 @@ anything belonging to other projects on this shared device:
   running service, not referenced by any container). This was the only
   cleanup needed to get enough headroom to pull the old image / build the
   new one.
-- All bench-specific artifacts created during this session (the built
-  `asrbench-rpi5-sensevoice:local` image, `/home/harvest/asrbench-pi/models`
-  bind mount with the downloaded SenseVoice tarball, the build context) were
-  removed after the run. Final state: **2.3 GB free**, no bench containers
-  running, `mcp_face_rec` (the only container holding `/dev/hailo0`)
-  untouched throughout — confirmed `healthy` before and after this session
-  since `/dev/hailo0` was never needed (Whisper/Hailo did not run).
+- The `/asr/stream` pass rebuilt the image and re-downloaded the SenseVoice
+  bundle. Its unused fp32 `model.onnx` (895 MB) was deleted — the backend
+  loads `model.int8.onnx` — and the Docker build cache pruned, which returned
+  the device to **2.1 GB free** with the bench container still up.
+- `mcp_face_rec` (the only container holding `/dev/hailo0`) was untouched
+  throughout and stayed `healthy`; `/dev/hailo0` was never opened.
 
 ## Files
 
-- `harvest-pi-sensevoice-zh-stream-FAILED.{json,md}` — the literal `bench.py`
-  run against `/asr/stream`, kept as evidence of Blocker 2 (100% errors,
-  not a transient failure).
-- `harvest-pi-sensevoice-zh-offline.json` — Pass 1 (profile default,
-  `max_concurrent_sessions=1`).
-- `harvest-pi-sensevoice-zh-offline-limit4.json` — Pass 2
+- `harvest-pi-sensevoice-zh-stream.{json,md}` — `bench.py` against
+  `/asr/stream` at c=1/2/4/8, 20 segments each, with the offline-stream fix in
+  place. Replaces the earlier `-FAILED` pair (100% errors), which is dropped:
+  the failure it recorded is described above and no longer reproduces.
+- `harvest-pi-top.log` — `top -b -d 1` through that sweep, 251 samples.
+- `harvest-pi-sensevoice-zh-offline.json` — earlier `POST /asr` Pass 1
+  (profile default, `max_concurrent_sessions=1`).
+- `harvest-pi-sensevoice-zh-offline-limit4.json` — earlier `POST /asr` Pass 2
   (`OVS_MAX_CONCURRENT_SESSIONS=8` clamped to 4 by the backend's declared
-  ceiling).
+  ceiling at the time).
 
 ## Not done
 
@@ -219,10 +264,6 @@ anything belonging to other projects on this shared device:
   repo today. This is a prerequisite engineering task, not a bench-run
   task — flagging for a scoped decision rather than building it
   unprompted.
-- Live resource sampling (CPU/mem/temp) during the sweep — not captured
-  this pass (see Resource sampling above).
-- `bench.py` itself was not modified to add an `/asr` (offline) mode, even
-  though that is the only endpoint SenseVoice-on-CPU can actually serve —
-  that is a tool-design decision for whoever owns `bench/asr_bench`, not a
-  per-device dispatch decision. The ad-hoc script used here
-  (`offline_asr_bench.py`) is *not* committed to this repo for that reason.
+- `bench.py` still has no `/asr` (offline, multipart) mode. It is no longer
+  needed for SenseVoice-on-CPU now that `/asr/stream` serves it, so the ad-hoc
+  script used for the earlier offline pass stays out of this repo.
