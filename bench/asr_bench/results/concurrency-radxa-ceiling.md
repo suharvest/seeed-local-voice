@@ -2,28 +2,39 @@
 
 ## 1. SenseVoice (3-core RKNN worker pool)
 
-Boundary: c=16 is where the pool falls over — 2 `too_many_sessions`/timeout-class
-errors out of 100 and p95 jumps to 13962.0 ms (7.9x the c=4 baseline of 1744.1 ms).
-Every level from c=2 through c=12 is error-free and stays within 2x of the c=4
-p95 (1744.1 -> 3488.2 ms threshold; c=12's 3275.9 ms is the last level under
-it). No tested level keeps p95 at or under 1.5 s — the closest is c=6
-(1721.8 ms). **Recommended production concurrency: 8** (p95 2222.2 ms, last
-level with p95 under c=4's 2x threshold by a wide margin and still comfortably
-inside the c=12 boundary; c=12 is usable but starts trading measurably more
-latency per added session).
+Boundary: c=12 is the last tested level with zero errors; c=13-15 were not
+tested. At c=16, 2 of 100 segments failed (`ok: false`, `feed_wall_ms: 0`,
+`eos_to_final_ms: 0`, empty `error` string) — consistent with a
+connection-level failure before any audio was sent, not a graceful
+`too_many_sessions` rejection, which this harness would record differently.
+p95 at c=16 also jumps to 13962.0 ms, 8.0x the c=4 baseline of 1744.1 ms.
+Every level from c=2 through c=12 stays within 2x of that baseline (1744.1 ->
+3488.2 ms threshold; c=12's 3275.9 ms is the last level under it). No tested
+level keeps p95 at or under 1.5 s — the closest is c=6 (1721.8 ms).
+**Recommended production concurrency: 8** (p95 2222.2 ms, last level with p95
+under c=4's 2x threshold by a wide margin and still comfortably inside the
+c=12 boundary; c=12 is usable but starts trading measurably more latency per
+added session; c=13-15 are untested and c=16 is the first level observed to
+fail).
 
-Difference from the 20-segment pass in `results/radxa-multicore.md` (the "after"
-row, same 3-core pool, same profile family): at c=2/4/8 that pass reported p50
-1421.2/1361.5/1501.0 ms and p95 1517.6/1567.6/2037.1 ms with CER 5.99% (a
-different, smaller corpus draw). This 100-segment pass's p50s are close
-(1442.2/1480.2/1532.1 ms) but p95 is consistently higher at n=100
-(1911.6/1744.1/2222.2 ms) — with only 20 segments per level, c>=8 drained just
-2-3 segments per worker before the sweep ended, too few for a stable p95;
-CER also differs (5.13% vs 5.99%) because the corpus draw itself changed (100
-public AISHELL-1 items vs 20), not because of a decode regression. This pass
-is also the first to test c=12/16 on this 3-core pool with a corpus large
-enough to sustain each concurrency level, and it is where the pool's actual
-ceiling (c=16) first becomes visible.
+Relationship to the 20-segment pass in `results/radxa-multicore.md` (the
+"after" row, same 3-core pool, same profile family): the corpus builder draws
+items in a fixed sort order, so this 100-item corpus's first 20 zh items are
+the same items, in the same order, as that pass's 20-item corpus — this is an
+expansion of the same draw, not an independent redraw. Confirming that, the
+shared-item CER is 5.99% in both passes. At c=2/4/8 that pass reported p50
+1421.2/1361.5/1501.0 ms and p95 1517.6/1567.6/2037.1 ms against this pass's
+p50 1442.2/1480.2/1532.1 ms and p95 1911.6/1744.1/2222.2 ms — p50s track
+closely, p95 is consistently higher here. The 20-item pass only fed 2-3
+segments per worker at c>=8 before its sweep ended, which is one plausible
+explanation for a less-stable p95 at those levels, but a single 20-item and a
+single 100-item sweep cannot isolate sample size as the cause from the other
+differences between the passes (admission ceiling 8/queue depth 5 there vs
+32/29 here, and the 5.13% CER on the full 100-item zh set here reflects the
+80 items added beyond the original 20, not a decode difference). This pass is
+also the first to test c=12/16 on this 3-core pool with a corpus large enough
+to sustain each concurrency level, and it is where the first tested failing
+level (c=16) becomes visible.
 
 ### Setup
 
@@ -70,24 +81,27 @@ Core1 84%, peak Core2 89% — all three cores load-bearing, consistent with the
 
 ### Reading
 
-- CER is flat at 5.13% from c=2 through c=12, confirming concurrency does not
-  change decode output on this backend at a fixed corpus. It is not directly
-  comparable to the 20-segment pass's 5.99% figure — that used a smaller,
-  different draw from the same AISHELL-1 speaker.
+- CER is flat at 5.13% from c=2 through c=12 on this 100-item corpus,
+  confirming concurrency does not change decode output on this backend. The
+  20-segment pass's 5.99% CER is over its smaller 20-item subset; the two
+  figures differ because 80 additional items were added to reach 100, not
+  because of a decode difference — the CER on the shared 20 items is 5.99% in
+  both passes.
 - p50 stays inside a narrow band (1432-1533 ms) through c=8, meaning the
   queue absorbs load without much per-segment latency growth up to 8
   concurrent sessions on 3 physical worker contexts. p95 is the metric that
-  moves first: it climbs from 1744.1 ms (c=4) through 3275.9 ms (c=12), a
-  gradual, monotonic increase consistent with growing queue depth, then jumps
-  to 13962.0 ms at c=16 alongside the first errors — a step change, not a
-  continuation of the same trend.
+  moves first: it generally climbs from 1744.1 ms (c=4) through 3275.9 ms
+  (c=12) — with one exception, c=6's 1721.8 ms dips slightly below c=4's
+  1744.1 ms — before jumping to 13962.0 ms at c=16 alongside the first
+  errors, a step change rather than a continuation of the same trend.
 - No concurrency level tested keeps p95 at or under 1.5 s (the bar met by
   cat-remote's 2-core RK3576 pool through c=8 in `concurrency-cat-remote-ceiling.md`).
-  The lowest p95 measured here is 1721.8 ms at c=6. This is a materially
-  worse latency floor than cat-remote's, on a board with more NPU cores (3
-  vs 2) — the extra core buys higher sustainable throughput (1.45 seg/s at
-  c=12 vs cat-remote's 1.61 seg/s at c=12 is comparable) but not lower
-  single-segment latency.
+  The lowest p95 measured here is 1721.8 ms at c=6 — a materially worse
+  latency floor than cat-remote's, despite this board having more NPU cores
+  (3 vs 2). Sustainable throughput at c=12 is also lower here (1.45 seg/s)
+  than cat-remote's 2-core pool at the same concurrency (1.61 seg/s) — this
+  sweep does not show the extra core translating into an advantage on either
+  metric; isolating why is out of scope for this bench-only pass.
 - The c=8 -> c=12 step is where the marginal latency cost accelerates
   (p95 +47%, 2222.2 -> 3275.9 ms) while throughput grows +33% (1.09 -> 1.45
   seg/s); c=12 -> c=16 is where the system stops queueing gracefully and
@@ -165,13 +179,15 @@ counter) is what the added admission concurrency queues in front of.
   requests are still near the front of the queue; p95 is the metric that
   shows the real cost, rising 5.7x from c=1 to c=8 (968.2 -> 5530.8 ms) as
   more requests wait behind the single serialized decoder.
-- Because inference stays serialized (`supports_parallel=False`), raising
-  `max_concurrent` past 1 does not raise decode throughput — aggregate RTF
-  (`throughput_audio_rtf_aggregate`) grows with concurrency purely because
-  more audio is being *accepted* per wall-clock second, not decoded faster;
-  segment throughput (seg/s) grows sub-linearly (0.17 -> 0.98 from c=1 to
-  c=8, a 5.8x increase for an 8x concurrency increase) because the decoder
-  is still the bottleneck.
+- Segment throughput (`throughput_segments_per_s`, all 76 segments complete
+  at every level) rises from 0.17 to 0.98 seg/s, c=1 to c=8 — a 5.7x increase
+  for an 8x concurrency increase. This is *completed* throughput, not merely
+  accepted admission: with real-time audio feeding overlapping the single
+  serialized decoder, more sessions in flight lets the pipeline stay busier
+  between decode calls. It does not establish a higher maximum decode
+  capacity than c=1 — the decoder itself is still one-at-a-time — only that
+  this sweep's arrival pattern extracts more of the existing capacity as
+  concurrency rises, at the cost of the p95 growth above.
 - This is architecturally the same trade cat-remote's report predicted as
   "out of scope" for a bench-only pass: "giving `WhisperASRConfig` a real
   `max_concurrent`... is a code change" needed before the ceiling could be
