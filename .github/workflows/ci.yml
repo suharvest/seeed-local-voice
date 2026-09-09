@@ -95,6 +95,13 @@ jobs:
             tests/test_v091_runtime_profile_packaging.py \
             tests/test_v091_release_contract.py
 
+      - name: ASR bench client tests
+        # bench/asr_bench has its own dependency set (websockets, soundfile,
+        # jiwer). The collection test stubs the socket, so only the imports
+        # need to resolve.
+        working-directory: bench/asr_bench
+        run: uv run --with pytest pytest test_bench_collection.py -q
+
       # The agent package depends on voxedge via an editable uv source at
       # `../../voxedge` (a sibling of this repo — see agent/pyproject.toml
       # [tool.uv.sources]). voxedge lives in its own public repo and is not
