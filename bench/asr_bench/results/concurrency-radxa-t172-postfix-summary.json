@@ -1,0 +1,37 @@
+{
+  "date": "2026-09-09",
+  "device": "radxa (reComputer RK3588 series)",
+  "backend_commit": "suharvest/rkvoice-stream@c972711 (merged into main as 9d18ab35)",
+  "note": "Retest after c972711 fixed CTC-collapse restart, boundary-space rejoin, and filename-T floor bugs in the windowed decode path. PR #96 numbers (in the table above this section) were measured before those fixes.",
+  "zh": {
+    "concurrency": 1,
+    "segments": 100,
+    "ok": 100,
+    "errors": 0,
+    "cer": 0.0474
+  },
+  "en": {
+    "concurrency": 1,
+    "note": "merged from two back-to-back c=1 runs (4/100 transient WS client errors each, disjoint segment ids) into one clean 100/100 set",
+    "buckets": {
+      "all": {
+        "n": 100,
+        "wer_prefix_pr96": 0.0459,
+        "wer_postfix": 0.0413,
+        "delta_pp": -0.46
+      },
+      "le_10.08s_one_pass": {
+        "n": 82,
+        "wer_prefix_pr96": 0.0412,
+        "wer_postfix": 0.0412,
+        "delta_pp": 0.0
+      },
+      "gt_10.08s_windowed": {
+        "n": 18,
+        "wer_prefix_pr96": 0.0669,
+        "wer_postfix": 0.0418,
+        "delta_pp": -2.51
+      }
+    }
+  }
+}
