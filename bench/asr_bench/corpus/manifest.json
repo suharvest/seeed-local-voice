@@ -1,0 +1,375 @@
+{
+  "version": 1,
+  "description": "Public labeled subset for asr_bench CER/WER: zh from AISHELL-1 (Apache-2.0, train-range speaker per HF mirror availability — see module docstring), en from LibriSpeech test-clean (CC BY 4.0).",
+  "audio_spec": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "format": "wav"
+  },
+  "categories": {
+    "pub": "public labeled corpus, single utterance"
+  },
+  "files": [
+    {
+      "id": "zh_pub_00",
+      "filename": "zh/BAC009S0002W0122.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 6.0,
+      "transcript": "而对楼市成交抑制作用最大的限购",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_01",
+      "filename": "zh/BAC009S0002W0123.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 3.87,
+      "transcript": "也成为地方政府的眼中钉",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_02",
+      "filename": "zh/BAC009S0002W0124.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 5.41,
+      "transcript": "自六月底呼和浩特市率先宣布取消限购后",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_03",
+      "filename": "zh/BAC009S0002W0125.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 3.17,
+      "transcript": "各地政府便纷纷跟进",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_04",
+      "filename": "zh/BAC009S0002W0126.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 2.58,
+      "transcript": "仅一个多月的时间里",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_05",
+      "filename": "zh/BAC009S0002W0127.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 5.89,
+      "transcript": "除了北京上海广州深圳四个一线城市和三亚之外",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_06",
+      "filename": "zh/BAC009S0002W0128.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 3.39,
+      "transcript": "四十六个限购城市当中",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_07",
+      "filename": "zh/BAC009S0002W0129.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 6.14,
+      "transcript": "四十一个已正式取消或变相放松了限购",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_08",
+      "filename": "zh/BAC009S0002W0130.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 4.13,
+      "transcript": "财政金融政策紧随其后而来",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_09",
+      "filename": "zh/BAC009S0002W0131.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 4.41,
+      "transcript": "显示出了极强的威力",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_10",
+      "filename": "zh/BAC009S0002W0132.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 6.77,
+      "transcript": "放松了与自往需求密切相关的房贷政策",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_11",
+      "filename": "zh/BAC009S0002W0133.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 9.32,
+      "transcript": "其中包括对拥有一套住房并已结清相应购房贷款的家庭",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_12",
+      "filename": "zh/BAC009S0002W0134.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 7.29,
+      "transcript": "为改善居住条件再次申请贷款购买普通商品住房",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_13",
+      "filename": "zh/BAC009S0002W0135.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 7.15,
+      "transcript": "银行业金融机构执行首套房贷款政策",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_14",
+      "filename": "zh/BAC009S0002W0136.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 6.32,
+      "transcript": "这个后来被称为九三零新政策的措施",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_15",
+      "filename": "zh/BAC009S0002W0137.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 7.25,
+      "transcript": "被市场公认为是今年对楼市影响最大的一个政策",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_16",
+      "filename": "zh/BAC009S0002W0138.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 6.45,
+      "transcript": "以提高住房公积金缴存职工住房消费能力",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_17",
+      "filename": "zh/BAC009S0002W0139.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 6.83,
+      "transcript": "支持缴存职工购买首套和改善型自住住房",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_18",
+      "filename": "zh/BAC009S0002W0140.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 7.63,
+      "transcript": "通过财政补贴手段鼓励购房的地区也在不断增加",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "zh_pub_19",
+      "filename": "zh/BAC009S0002W0141.wav",
+      "lang": "zh",
+      "category": "pub",
+      "duration_s": 5.15,
+      "transcript": "其中多项政策惠及购房者",
+      "source": "AISHELL-1 speaker S0002 (train-range mirror, see module docstring)"
+    },
+    {
+      "id": "en_pub_00",
+      "filename": "en/ls_test_clean_000.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 3.5,
+      "transcript": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_01",
+      "filename": "en/ls_test_clean_001.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 14.22,
+      "transcript": "THE ENGLISH FORWARDED TO THE FRENCH BASKETS OF FLOWERS OF WHICH THEY HAD MADE A PLENTIFUL PROVISION TO GREET THE ARRIVAL OF THE YOUNG PRINCESS THE FRENCH IN RETURN INVITED THE ENGLISH TO A SUPPER WHICH WAS TO BE GIVEN THE NEXT DAY",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_02",
+      "filename": "en/ls_test_clean_002.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 5.03,
+      "transcript": "CONGRATULATIONS WERE POURED IN UPON THE PRINCESS EVERYWHERE DURING HER JOURNEY",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_03",
+      "filename": "en/ls_test_clean_003.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 23.32,
+      "transcript": "FROM THE RESPECT PAID HER ON ALL SIDES SHE SEEMED LIKE A QUEEN AND FROM THE ADORATION WITH WHICH SHE WAS TREATED BY TWO OR THREE SHE APPEARED AN OBJECT OF WORSHIP THE QUEEN MOTHER GAVE THE FRENCH THE MOST AFFECTIONATE RECEPTION FRANCE WAS HER NATIVE COUNTRY AND SHE HAD SUFFERED TOO MUCH UNHAPPINESS IN ENGLAND FOR ENGLAND TO HAVE MADE HER FORGET FRANCE",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_04",
+      "filename": "en/ls_test_clean_004.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 11.06,
+      "transcript": "SHE TAUGHT HER DAUGHTER THEN BY HER OWN AFFECTION FOR IT THAT LOVE FOR A COUNTRY WHERE THEY HAD BOTH BEEN HOSPITABLY RECEIVED AND WHERE A BRILLIANT FUTURE OPENED BEFORE THEM",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_05",
+      "filename": "en/ls_test_clean_005.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 13.16,
+      "transcript": "THE COUNT HAD THROWN HIMSELF BACK ON HIS SEAT LEANING HIS SHOULDERS AGAINST THE PARTITION OF THE TENT AND REMAINED THUS HIS FACE BURIED IN HIS HANDS WITH HEAVING CHEST AND RESTLESS LIMBS",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_06",
+      "filename": "en/ls_test_clean_006.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 5.85,
+      "transcript": "THIS HAS INDEED BEEN A HARASSING DAY CONTINUED THE YOUNG MAN HIS EYES FIXED UPON HIS FRIEND",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_07",
+      "filename": "en/ls_test_clean_007.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 3.31,
+      "transcript": "YOU WILL BE FRANK WITH ME I ALWAYS AM",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_08",
+      "filename": "en/ls_test_clean_008.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 4.79,
+      "transcript": "CAN YOU IMAGINE WHY BUCKINGHAM HAS BEEN SO VIOLENT I SUSPECT",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_09",
+      "filename": "en/ls_test_clean_009.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 7.28,
+      "transcript": "IT IS YOU WHO ARE MISTAKEN RAOUL I HAVE READ HIS DISTRESS IN HIS EYES IN HIS EVERY GESTURE AND ACTION THE WHOLE DAY",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_10",
+      "filename": "en/ls_test_clean_010.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 3.04,
+      "transcript": "I CAN PERCEIVE LOVE CLEARLY ENOUGH",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_11",
+      "filename": "en/ls_test_clean_011.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 3.19,
+      "transcript": "I AM CONVINCED OF WHAT I SAY SAID THE COUNT",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_12",
+      "filename": "en/ls_test_clean_012.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 1.94,
+      "transcript": "IT IS ANNOYANCE THEN",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_13",
+      "filename": "en/ls_test_clean_013.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 2.94,
+      "transcript": "IN THOSE VERY TERMS I EVEN ADDED MORE",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_14",
+      "filename": "en/ls_test_clean_014.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 16.84,
+      "transcript": "BUT CONTINUED RAOUL NOT INTERRUPTED BY THIS MOVEMENT OF HIS FRIEND HEAVEN BE PRAISED THE FRENCH WHO ARE PRONOUNCED TO BE THOUGHTLESS AND INDISCREET RECKLESS EVEN ARE CAPABLE OF BRINGING A CALM AND SOUND JUDGMENT TO BEAR ON MATTERS OF SUCH HIGH IMPORTANCE",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_15",
+      "filename": "en/ls_test_clean_015.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 6.38,
+      "transcript": "THUS IT IS THAT THE HONOR OF THREE IS SAVED OUR COUNTRY'S OUR MASTER'S AND OUR OWN",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_16",
+      "filename": "en/ls_test_clean_016.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 10.02,
+      "transcript": "YES I NEED REPOSE MANY THINGS HAVE AGITATED ME TO DAY BOTH IN MIND AND BODY WHEN YOU RETURN TO MORROW I SHALL NO LONGER BE THE SAME MAN",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_17",
+      "filename": "en/ls_test_clean_017.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 6.16,
+      "transcript": "BUT IN THIS FRIENDLY PRESSURE RAOUL COULD DETECT THE NERVOUS AGITATION OF A GREAT INTERNAL CONFLICT",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_18",
+      "filename": "en/ls_test_clean_018.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 10.81,
+      "transcript": "THE NIGHT WAS CLEAR STARLIT AND SPLENDID THE TEMPEST HAD PASSED AWAY AND THE SWEET INFLUENCES OF THE EVENING HAD RESTORED LIFE PEACE AND SECURITY EVERYWHERE",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    },
+    {
+      "id": "en_pub_19",
+      "filename": "en/ls_test_clean_019.wav",
+      "lang": "en",
+      "category": "pub",
+      "duration_s": 11.65,
+      "transcript": "UPON THE LARGE SQUARE IN FRONT OF THE HOTEL THE SHADOWS OF THE TENTS INTERSECTED BY THE GOLDEN MOONBEAMS FORMED AS IT WERE A HUGE MOSAIC OF JET AND YELLOW FLAGSTONES",
+      "source": "LibriSpeech test-clean (openslr/librispeech_asr, HF mirror)"
+    }
+  ]
+}

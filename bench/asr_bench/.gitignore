@@ -1,0 +1,5 @@
+_dl/
+results/
+.venv/
+corpus/zh/*.wav
+corpus/en/*.wav
