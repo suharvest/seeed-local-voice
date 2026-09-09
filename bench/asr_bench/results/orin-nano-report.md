@@ -102,17 +102,29 @@ further within this pass's time budget.
 ## Image gaps found and worked around (all logged as EVIDENCE below)
 
 The compose-default image `v0.9.0-ondemand-20260721c` (built 2026-07-21)
-predates both ASR backends being benched (SenseVoice landed 2026-06-10,
-Whisper landed 2026-08-28 — `git log` on `configs/profiles/{jetson-sensevoice,orin-whisper}.json`).
-No other locally cached Jetson image on this box (checked full `docker
-images` list) is more recent than 2026-07-21 either. Fixes applied, in the
-running containers only, not persisted to any image or registry:
+predates the Whisper backend (landed 2026-08-28 — `git log` on
+`configs/profiles/orin-whisper.json`) entirely; SenseVoice landed earlier
+(2026-06-10, `git log` on `configs/profiles/jetson-sensevoice.json`) and is
+present in this image, but its baked `voxedge==0.0.5a0` venv is missing
+two of its own declared runtime deps (see item 1 below) — a packaging gap
+at build time, not a missing-backend gap. No other locally cached Jetson
+image on this box (checked full `docker images` list) is more recent than
+2026-07-21 either. Fixes applied, in the running containers only, not
+persisted to any image or registry:
 
 1. `voxedge` (the PyPI ASR/TTS runtime library) was pinned in the image at
    `0.0.5a0`. `jetson.sensevoice_trt` preload failed with `ModuleNotFoundError:
    No module named 'sentencepiece'` and, once that was patched, `... No module
    named 'kaldi_native_fbank'` — both are `voxedge` runtime deps not bundled
-   in this image's site-packages. Installed both via `pip install
+   in this image's site-packages. Both were caught at container preload
+   (`/readyz` stayed unhealthy, visible in `docker logs` — see EVIDENCE)
+   **before any concurrency sweep was started against this container**, so
+   there is no discarded/contaminated SenseVoice run to flag here: the
+   `orin-nano-sensevoice-zh.json` table below is from the single sweep run
+   after both deps were installed, and every one of its 20 successful
+   segments carries non-empty transcript text (spot-checked; no silent
+   `ok: true` + empty-text failures like the ones the harvest-pi report hit
+   for the same `kaldi_native_fbank` gap). Installed both via `pip install
    --index-url https://pypi.tuna.tsinghua.edu.cn/simple sentencepiece
    kaldi_native_fbank` inside the running container; no restart needed for
    `kaldi_native_fbank` (imported lazily per-call), one `docker restart` for

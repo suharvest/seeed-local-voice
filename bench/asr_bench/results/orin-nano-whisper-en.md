@@ -11,8 +11,9 @@
   `docker restart` before each isolated level produced clean, reproducible
   numbers; the concurrency>=2 result (server-enforced session cap) was
   reproduced identically in both the continuous and isolated runs. Treat the
-  continuous-run degradation as an open issue in `jetson.whisper_trt`'s
-  session/executor cleanup path, not a bench.py bug — see report body.
+  continuous-run degradation as an open issue, suspected to be in
+  `jetson.whisper_trt`'s session/executor cleanup path rather than in
+  `bench.py`'s client — not root-caused within this pass, see report body.
 
 | Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | Mean error rate |
 |---|---|---|---|---|---|---|---|---|---|
