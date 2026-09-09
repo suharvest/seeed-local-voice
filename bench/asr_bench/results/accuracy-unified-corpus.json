@@ -1,7 +1,7 @@
 {
   "whisper": {
     "J3011": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/j3011-whisper-matched100-fixed.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/j3011-whisper-matched100-fixed.json",
       "concurrency": 1,
       "n": 100,
       "aggregate": 0.07623888182973317,
@@ -12,7 +12,7 @@
       "note": "reComputer J3011 (Jetson Orin Nano 8GB Super), TensorRT bf16 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"
     },
     "J4012": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/j4012-whisper-matched100-fixed.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/j4012-whisper-matched100-fixed.json",
       "concurrency": 1,
       "n": 100,
       "aggregate": 0.07623888182973317,
@@ -21,11 +21,44 @@
       "device": "orin-nx",
       "label": "J4012",
       "note": "reComputer J4012 (Jetson Orin NX 16GB Super), TensorRT bf16 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"
+    },
+    "RK3576": {
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/rk3576-whisper-matched100-fixed.json",
+      "concurrency": 1,
+      "n": 100,
+      "aggregate": 0.08513341804320203,
+      "mean": 0.09703715728715728,
+      "p50": 0.0,
+      "device": "cat-remote",
+      "label": "RK3576",
+      "note": "cat-remote (RK3576), RKNN base10 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"
+    },
+    "RK3588": {
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/rk3588-whisper-matched100-fixed.json",
+      "concurrency": 1,
+      "n": 100,
+      "aggregate": 0.07496823379923762,
+      "mean": 0.08787049062049061,
+      "p50": 0.0,
+      "device": "radxa",
+      "label": "RK3588",
+      "note": "radxa (RK3588), RKNN base10 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"
+    },
+    "R2000": {
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/r2000-whisper-matched100-fixed.json",
+      "concurrency": 1,
+      "n": 100,
+      "aggregate": 0.08386277001270648,
+      "mean": 0.09946572871572872,
+      "p50": 0.0,
+      "device": "harvest-pi",
+      "label": "R2000",
+      "note": "reComputer R2000 (Raspberry Pi 5 + Hailo-8), Hailo base encoder (5s window) + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"
     }
   },
   "sensevoice": {
     "J3011": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/concurrency-orin-nano-ceiling.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/concurrency-orin-nano-ceiling.json",
       "concurrency": 8,
       "n": 100,
       "aggregate": 0.04819277108433735,
@@ -36,7 +69,7 @@
       "note": "reComputer J3011 (Jetson Orin Nano 8GB Super), TensorRT SenseVoice, 100 of the 200-item corpus extracted by matching id+ref"
     },
     "J4012": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/concurrency-orin-nx-ceiling.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/concurrency-orin-nx-ceiling.json",
       "concurrency": 8,
       "n": 100,
       "aggregate": 0.04819277108433735,
@@ -47,7 +80,7 @@
       "note": "reComputer J4012 (Jetson Orin NX 16GB Super), TensorRT SenseVoice, 100 of the 200-item corpus extracted by matching id+ref"
     },
     "RK3576": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/concurrency-cat-remote-ceiling.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/concurrency-cat-remote-ceiling.json",
       "concurrency": 4,
       "n": 100,
       "aggregate": 0.04819277108433735,
@@ -58,7 +91,7 @@
       "note": "RK3576 board, RKNN SenseVoice fp16-scaled encoder, native 100-item corpus"
     },
     "RK3588": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/concurrency-radxa-ceiling.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/concurrency-radxa-ceiling.json",
       "concurrency": 2,
       "n": 100,
       "aggregate": 0.04819277108433735,
@@ -69,7 +102,7 @@
       "note": "RK3588 board (radxa), RKNN SenseVoice fp16-scaled encoder, native 100-item corpus"
     },
     "R2000": {
-      "json": "/Users/harvest/project/_worktrees/ovs-accuracy-unified/bench/asr_bench/results/concurrency-harvest-pi-ceiling.json",
+      "json": "/Users/harvest/project/_worktrees/ovs-whisper-refix/bench/asr_bench/results/concurrency-harvest-pi-ceiling.json",
       "concurrency": 2,
       "n": 100,
       "aggregate": 0.04819277108433735,

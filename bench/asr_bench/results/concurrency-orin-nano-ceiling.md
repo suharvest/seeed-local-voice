@@ -138,9 +138,10 @@ section) using the same client, the same profile and the same corpus: of the
 24 items captured at both c=1 and c=24 there, the 4 that differed were each a
 strict prefix of the c=1 text, and for all 4 the join of every captured final
 matches between the two levels. With the fixed client, J4012 transcribes 0 of
-72 items differently at c=8, c=16 or c=24 than at c=1. J3011 has not been
-rerun, so the attribution here rests on that J4012 trace plus the fact that
-both boards ran the same client code.
+72 items differently at c=8, c=16 or c=24 than at c=1. J3011 has since been
+rerun with the fixed client too (see "Rerun with the fixed client" below):
+0/72 items differ from c=1 at c=8, c=16, c=24, or c=32, confirming the same
+result on this board directly rather than only by inference from J4012.
 
 The J3011 table above was produced by the pre-fix client, so both its WER
 column and its latency column carry that behaviour: for a split utterance the

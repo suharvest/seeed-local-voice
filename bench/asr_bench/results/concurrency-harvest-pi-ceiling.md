@@ -7,16 +7,17 @@ Two separate limits. On latency (p95 ≤ 1.5 s), the largest level that clears
 the bar is **c=6 for SenseVoice** — c=8 measured 1265.2–3058.4 ms over four
 passes and c=12 measured 1565.5 ms, while c=6 measured 1172.6 ms.
 
-Whisper's original c=8 admission rejections and its per-level WER drift were
-both bench-client artifacts (the client raced the server's own VAD against
-its EOS frame — see "History (superseded below)" in the Whisper section) and
-do not reproduce after `bench.py` was fixed to pin `?vad=none`. Rerun with
-the fixed client and a `voxedge` build that gives `WHISPER_MAX_CONCURRENT` a
-real effect: zero errors and zero rejections through c=16, WER byte-identical
-(8.39%) at every level, 0/100 transcripts differing from c=1 at any level.
-Recommended production concurrency: **6** for SenseVoice (the latency bar),
-**16** for Whisper (highest level tested, p95 1465.3 ms, still under the
-1.5 s bar).
+Whisper's per-level WER drift in the original table was a bench-client
+artifact (the client raced the server's own VAD against its EOS frame — see
+"History (superseded below)" in the Whisper section) and does not reproduce
+after `bench.py` was fixed to pin `?vad=none`. The original c=8
+`too_many_sessions` rejections were a genuine admission-ceiling hit, not a
+client artifact, and this rerun raises the ceiling to 16 rather than
+explaining them. Rerun with the fixed client and admission raised to 16:
+zero errors and zero rejections through c=16, WER byte-identical (8.39%) at
+every level, 0/100 transcripts differing from c=1 at any level. Recommended
+production concurrency: **6** for SenseVoice (the latency bar), **16** for
+Whisper (highest level tested, p95 1465.3 ms, still under the 1.5 s bar).
 
 ## Setup
 
@@ -165,9 +166,16 @@ VAD left on while also sending the EOS frame; under load the client's own
 EOS raced the server's endpoint detector, and the client scored whichever
 `is_final` arrived first as the whole segment. `bench.py` now pins
 `?vad=none` and accumulates every final. The c=8 `too_many_sessions`
-rejections were a real admission-ceiling limit at the time (`voxedge==0.0.13a0`
-had no `max_concurrent` field, so `WHISPER_MAX_CONCURRENT` had no effect);
-that has since been fixed upstream (see below).
+rejections (`current: 8, limit: 8` above) were a real admission-ceiling hit
+against the `OVS_MAX_CONCURRENT_SESSIONS=8` limiter, which was already in
+effect at the time — not caused by the missing `max_concurrent` field on
+`WhisperASRConfig` (that field gates the backend's own decode parallelism,
+not session admission) — and were not re-investigated in this rerun; the
+reconnect-race explanation above (a worker's reconnect racing the previous
+session's slot release) remains uninstrumented. This rerun raises the
+admission ceiling to 16 for headroom, which happens to avoid the c=8
+boundary the old table sat on, but does not establish what caused those
+specific rejections.
 
 ### Rerun with the fixed client and a real admission ceiling
 
@@ -208,21 +216,34 @@ board's hardware ceiling, only the highest level that stayed clean.
 
 ## Reading
 
+**Note:** the three bullets below on Whisper throughput/rejections/accuracy
+describe the withdrawn pre-fix table (c=4 recommended, 23.00% WER, rejections
+starting at c=8). See "Rerun with the fixed client and a real admission
+ceiling" above for the current numbers (c=16 recommended, 8.39% WER, zero
+rejections through c=16) — kept here only as the historical record for the
+CPU/latency/Hailo-utilization comparisons, which were not rerun (utilization
+sampling and CPU-percent sampling were not repeated for the fixed-client
+pass).
+
 - Both paths are CPU-heavy: SenseVoice peaked at 393.1% of 400% and Whisper at
   381%, since Whisper's decoder also runs on the CPU and only its encoder is on
   the NPU. On latency they land close: p50 is 625–791 ms for SenseVoice across
   its sweep and 302–507 ms for Whisper. Whisper's lower p50 comes with a 5 s
   window that only fits short utterances, and with rejections starting at c=8
-  while SenseVoice was still completing 100/100 there.
-- Throughput at the recommended level: SenseVoice 0.95 seg/s at c=6, Whisper
-  1.04 seg/s at c=4. Whisper's segments are shorter (2.96 s mean vs. 5.01 s),
-  so in audio-seconds per wall-second SenseVoice does 4.78 and Whisper 3.09.
+  while SenseVoice was still completing 100/100 there (in the withdrawn table;
+  see the note above).
+- Throughput at the withdrawn table's recommended level: SenseVoice 0.95 seg/s
+  at c=6, Whisper 1.04 seg/s at c=4. Whisper's segments are shorter (2.96 s
+  mean vs. 5.01 s), so in audio-seconds per wall-second SenseVoice does 4.78
+  and Whisper 3.09.
 - Accuracy is not comparable across the two sections — different languages,
   different corpora, character-level vs. word-level scoring. SenseVoice: 4.82%
-  corpus-aggregate CER on zh AISHELL-1. Whisper base on Hailo: 23.00%
-  corpus-aggregate WER on LibriSpeech test-clean clips ≤ 4 s at c=1. Compare
+  corpus-aggregate CER on zh AISHELL-1. Whisper base on Hailo, withdrawn table:
+  23.00% corpus-aggregate WER on LibriSpeech test-clean clips ≤ 4 s at c=1
+  (revised to 8.39% in the fixed-client rerun above, same corpus). Compare
   aggregate with aggregate and mean with mean; the two columns are different
   statistics over the same transcripts.
-- The Hailo-8 sampled at 25% utilization at the highest level tested, and at
-  4–16% below that. What would happen at c=5/6/7, or with the admission
-  ceiling raised above 8, was not measured — those levels were not run.
+- The Hailo-8 sampled at 25% utilization at the highest level tested in the
+  withdrawn table (c=8), and at 4–16% below that; this was not resampled for
+  the fixed-client rerun's higher levels (c=12/16), so utilization at those
+  levels is unmeasured.

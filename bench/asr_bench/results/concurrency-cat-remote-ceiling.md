@@ -176,30 +176,40 @@ voxedge wheel from `main` 466f3e4, `--api-key testkey123`). Server confirmed
 
 | Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | Throughput (seg/s) | WER (aggregate) |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 72 | 72 | 0 | 775.6  | 1821.5 | 0.186 | 0.16 | 6.30% |
-| 2 | 72 | 72 | 0 | 809.3  | 1380.4 | 0.173 | 0.33 | 6.30% |
-| 4 | 72 | 72 | 0 | 880.3  | 1681.4 | 0.203 | 0.64 | 6.30% |
-| 8 | 72 | 72 | 0 | 1330.8 | 2702.8 | 0.297 | 1.15 | 6.30% |
+| 1 | 72 | 72 | 0 | 775.6  | 1821.5 | 0.186 | 0.16 | 5.88% |
+| 2 | 72 | 72 | 0 | 809.3  | 1380.4 | 0.173 | 0.33 | 5.88% |
+| 4 | 72 | 72 | 0 | 880.3  | 1681.4 | 0.203 | 0.64 | 5.88% |
+| 8 | 72 | 72 | 0 | 1330.8 | 2702.8 | 0.297 | 1.15 | 5.88% |
 
-Zero errors at every level. WER is byte-identical (6.30% aggregate) at every
+Zero errors at every level. WER is byte-identical (5.88% aggregate; 6.30%
+per-segment mean) at every
 level, and 0/72 transcripts differ from c=1 at c=2, c=4, or c=8; `pre_eos_finals`
 is 0 for every segment at every level. p95 is not monotonic with concurrency
-here: c=1 (1821.5 ms) is higher than c=2 (1380.4 ms) — the top outliers at
-c=1 run 1.7-3.1 s on a handful of the corpus's longer (up to 9.24 s) items,
+here: c=1 (1821.5 ms) is higher than c=2 (1380.4 ms). One hypothesis is that
+c=1's outliers concentrate on the corpus's longer (up to 9.24 s) items,
 which this fixed-72-item subset includes and the withdrawn table's smaller
-per-level draws did not always reach. **Only c=2 clears the 1.5 s p95 bar
-on this corpus**; c=4 and c=8 exceed it (1681.4 ms, 2702.8 ms), and c=1's
-p95 is inflated by long-item outliers rather than by concurrency itself. This
-does not match the withdrawn table's "clean through c=4" reading and
-supersedes it.
+per-level draws did not always reach — but this is not established: the
+per-segment data includes a 3.04 s clip taking 2272.5 ms and a 3.73 s clip
+taking only 1726.1 ms, so clip length alone does not predict which items are
+slow. **Only c=2 clears the 1.5 s p95 bar on this corpus**; c=4 and c=8
+exceed it (1681.4 ms, 2702.8 ms), and c=1's non-monotonic p95 is not
+explained by this pass's data. This does not match the withdrawn table's
+"clean through c=4" reading and supersedes it.
 
 For the cross-device matched-100 comparison (same 100-item <=4.0 s en subset
 used for R2000's Hailo-8 pass and `whisper-hailo-wer-isolation.md`), a
-separate c=1 run against that subset: `results/rk3576-matched-r2000-100.json`,
+separate c=1 run against that subset: `results/rk3576-whisper-matched100-fixed.json`,
 100/100 ok, 0 errors, aggregate WER **8.51%**, p50 654.8 ms, p95 1099.3 ms,
-`pre_eos_finals` 0/100.
+`pre_eos_finals` 0/100 — this row is also folded into `accuracy-unified-corpus.md`.
 
 ### Reading
+
+**Note:** this section's growing-corpus table above (8/16/32/64 items) was
+collected before `bench.py` pinned `?vad=none`; the "Rerun with the fixed
+client, fixed 72-item subset at every level" subsection revises the
+recommended ceiling from c=4 to **c=2** (only level clearing 1.5 s p95 on
+the fixed-72 subset — c=1 and c=4/c=8 do not, see that subsection). The
+bullets below describe the growing-corpus table and are kept as history.
 
 - Raising `WhisperASRConfig.max_concurrent` (the voxedge `main` 466f3e4 fix)
   turns RK3576 Whisper from a hard single-session admission clamp into the
@@ -210,8 +220,12 @@ separate c=1 run against that subset: `results/rk3576-matched-r2000-100.json`,
   previous `too_many_sessions` rejection wall at c>=2.
 - This confirms the previous section's "architectural, not admission-limiter"
   framing was specific to the *installed package version*, not something
-  inherent to the RK3576 RKNN-encoder/CPU-decoder design — the same hardware
-  and model artifacts now sustain c=4 cleanly once the config field exists.
+  inherent to the RK3576 RKNN-encoder/CPU-decoder design. On the
+  growing-corpus table above, c=4 completed cleanly and under the 1.5 s bar
+  (1478.4 ms); the fixed-72-item rerun below found c=4 above the bar
+  (1681.4 ms) on a corpus that includes longer items than some of the
+  growing table's smaller per-level draws — see the rerun subsection for the
+  current reading.
 - The per-item decode problem on `en_pub_00` noted in the prior pass was not
   re-investigated here (out of scope for the concurrency question this pass
   measures).

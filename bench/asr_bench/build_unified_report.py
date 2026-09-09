@@ -26,6 +26,12 @@ whisper_devices = [
      "reComputer J3011 (Jetson Orin Nano 8GB Super), TensorRT bf16 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"),
     ("J4012", "orin-nx", "results/j4012-whisper-matched100-fixed.json", 1, None,
      "reComputer J4012 (Jetson Orin NX 16GB Super), TensorRT bf16 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"),
+    ("RK3576", "cat-remote", "results/rk3576-whisper-matched100-fixed.json", 1, None,
+     "cat-remote (RK3576), RKNN base10 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"),
+    ("RK3588", "radxa", "results/rk3588-whisper-matched100-fixed.json", 1, None,
+     "radxa (RK3588), RKNN base10 encoder + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"),
+    ("R2000", "harvest-pi", "results/r2000-whisper-matched100-fixed.json", 1, None,
+     "reComputer R2000 (Raspberry Pi 5 + Hailo-8), Hailo base encoder (5s window) + CPU ONNX KV decoder, voxedge main@466f3e4, bench.py post-#95 (vad=none, accumulate-to-close)"),
 ]
 
 sensevoice_devices = [

@@ -192,12 +192,13 @@ worktree's `main` at 438e0a4b, voxedge wheel from `main` 466f3e4,
 
 | Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | Throughput (seg/s) | WER (aggregate) |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 72 | 72 | 0 | 665.7 | 983.1  | 0.151 | 0.17 | 6.16% |
-| 2 | 72 | 72 | 0 | 657.2 | 1045.4 | 0.148 | 0.34 | 6.16% |
-| 4 | 72 | 72 | 0 | 654.8 | 1380.4 | 0.163 | 0.68 | 6.16% |
-| 8 | 72 | 72 | 0 | 886.0 | 2083.4 | 0.210 | 1.25 | 6.16% |
+| 1 | 72 | 72 | 0 | 665.7 | 983.1  | 0.151 | 0.17 | 5.88% |
+| 2 | 72 | 72 | 0 | 657.2 | 1045.4 | 0.148 | 0.34 | 5.88% |
+| 4 | 72 | 72 | 0 | 654.8 | 1380.4 | 0.163 | 0.68 | 5.88% |
+| 8 | 72 | 72 | 0 | 886.0 | 2083.4 | 0.210 | 1.25 | 5.88% |
 
-Zero errors at every level. WER is byte-identical (6.16% aggregate) at every
+Zero errors at every level. WER is byte-identical (5.88% aggregate; 6.16%
+per-segment mean) at every
 level, and 0/72 transcripts differ from c=1 at c=2, c=4, or c=8;
 `pre_eos_finals` is 0 for every segment at every level. p95 is monotonic
 here and clears the 1.5 s bar through c=4 (1380.4 ms), crossing it at c=8
@@ -208,9 +209,9 @@ that table having been affected by the same client defect fixed here.
 
 For the cross-device matched-100 comparison (same 100-item <=4.0 s en subset
 used for R2000's Hailo-8 pass and `whisper-hailo-wer-isolation.md`), a
-separate c=1 run against that subset: `results/rk3588-matched-r2000-100.json`,
+separate c=1 run against that subset: `results/rk3588-whisper-matched100-fixed.json`,
 100/100 ok, 0 errors, aggregate WER **7.50%**, p50 570.2 ms, p95 790.1 ms,
-`pre_eos_finals` 0/100.
+`pre_eos_finals` 0/100 — this row is also folded into `accuracy-unified-corpus.md`.
 
 ### Reading
 

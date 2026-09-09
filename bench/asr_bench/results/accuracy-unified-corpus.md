@@ -9,11 +9,12 @@ to corpus alone on a matched-item check). This report re-scores every device
 against one fixed 100-item subset per language, so the only variable left
 between rows is the device/backend.
 
-**Note on scope:** this PR covers J3011 and J4012 Whisper, plus SenseVoice
-on all 5 devices. RK3576, RK3588, and R2000 Whisper rows on this same
-100-item corpus are produced by a separate, concurrent PR (that work was
-already using those three boards' exclusive-hardware paths for an unrelated
-sweep at the time of this pass) and will land as a follow-up.
+**Note on scope:** an earlier revision of this report covered only J3011 and
+J4012 Whisper (plus SenseVoice on all 5 devices), with RK3576/RK3588/R2000
+Whisper noted as a follow-up because those three boards were occupied by an
+unrelated concurrent sweep at the time. That follow-up landed in
+`bench/whisper-refix-recheck` and is folded in below — all 5 devices now
+have a Whisper row on this same 100-item corpus.
 
 ## Client fix in flight during this pass
 
@@ -33,8 +34,10 @@ This pass started with pre-#95 client runs on J3011 (`en_pub_*` matched-100
 corpus, aggregate WER measured at 19.44%) and reused J4012/R2000's
 already-existing matched-100 runs (19.06%/23.00%), all recorded before
 `438e0a4b` existed. All three are withdrawn here and J3011/J4012 are rerun
-on the post-#95 client (100/100 ok on both, see table below); R2000's rerun
-is out of scope for this PR (see "Note on scope").
+on the post-#95 client (100/100 ok on both, see table below). R2000's rerun
+on this same matched-100 corpus, plus first-time RK3576/RK3588 runs on it,
+landed in the follow-up noted above (see "Note on scope") and are folded
+into the table below.
 
 Note on the `pre_eos_finals` counter: this field counts finals the client
 drains **before** sending EOS (mid-feed VAD chatter) and exists unchanged in
@@ -89,22 +92,48 @@ the unified 100-id list.
 |---|---|---|---|---|---|
 | J3011 (Jetson Orin Nano 8GB Super) | TensorRT bf16 encoder, CPU ONNX KV decoder | 100/100 | **7.62%** | 8.86% | 0.00% |
 | J4012 (Jetson Orin NX 16GB Super) | TensorRT bf16 encoder, CPU ONNX KV decoder | 100/100 | **7.62%** | 8.86% | 0.00% |
+| RK3576 (cat-remote) | RKNN base10 encoder, CPU ONNX KV decoder | 100/100 | **8.51%** | 9.70% | 0.00% |
+| RK3588 (radxa) | RKNN base10 encoder, CPU ONNX KV decoder | 100/100 | **7.50%** | 8.79% | 0.00% |
+| R2000 (Raspberry Pi 5 + Hailo-8) | Hailo base encoder (5 s window), CPU ONNX KV decoder | 100/100 | **8.39%** | 9.95% | 0.00% |
 
-Both zero-error, both `pre_eos_finals=0` on every one of the 100 segments
-(no mid-feed VAD chatter drained before EOS on either board — see the note
-above on what this counter does and does not indicate), and mean WER agrees
-exactly (0.08858982683982684 on both, per `accuracy-unified-corpus.json`) —
-expected, since both boards run the identical `enc_base_30s_bf16.plan`
-TensorRT engine reused unchanged from each board's own model cache (not
-rebuilt this pass) plus the same CPU ONNX KV decoder.
+All five zero-error, all `pre_eos_finals=0` on every one of the 100 segments
+(no mid-feed VAD chatter drained before EOS on any device — see the note
+above on what this counter does and does not indicate). J3011/J4012's mean
+WER agrees exactly (0.08858982683982684 on both, per
+`accuracy-unified-corpus.json`) — expected, since both boards run the
+identical `enc_base_30s_bf16.plan` TensorRT engine reused unchanged from
+each board's own model cache (not rebuilt this pass) plus the same CPU ONNX
+KV decoder. RK3576/RK3588/R2000 each run a different encoder (RKNN base10 at
+a 10 s window on the RK boards, Hailo base at a 5 s window on R2000, vs.
+TensorRT bf16 at 30 s on the Jetsons) with the same CPU ONNX KV decoder, and
+their aggregate WER spans 7.50-8.51% against the Jetsons' 7.62% — a
+narrower spread than the pre-fix numbers this table withdraws, but not
+shown here to isolate encoder-vs-decoder or window-size effects; that
+would need a dedicated matched-item pass like
+`whisper-hailo-wer-isolation.md`, not run for this table.
 
-Recipe: image `sensecraft-missionpack.seeed.cn/solution/seeed-local-voice:v0.9.0-ondemand-20260721c`
+Recipe (J3011/J4012): image `sensecraft-missionpack.seeed.cn/solution/seeed-local-voice:v0.9.0-ondemand-20260721c`
 with `server/`+`configs/` bind-mounted from this branch and `voxedge`
 replaced in-container with a wheel built from `voxedge` `main` @466f3e4
 (adds the `max_concurrent` field `WhisperASRConfig` needs; PyPI
 `voxedge==0.0.13a0` does not have it); profile `orin-whisper-c64`,
 `OVS_API_KEYS=testkey123` (bench run with `--api-key`); `speech-models`
 Docker volume mounted at `/opt/models` for the persistent engine cache.
+
+Recipe (RK3576/RK3588): image `openvoicestream:rk-20260903.10` /
+`sensecraft-missionpack.seeed.cn/solution/seeed-local-voice:rk-20260903.10`,
+`server/`+`configs/` bind-mounted from this branch, same `voxedge` `main`
+@466f3e4 wheel, profiles `rk3576-whisper-c8` / `rk3588-whisper-10s` with
+`OVS_MAX_CONCURRENT_SESSIONS=8`/`WHISPER_MAX_CONCURRENT=8`; model artifacts
+(`whisper_encoder_base_10s.rknn`, decoder ONNX pair, vocab/mel files)
+pre-existing on each device. `--api-key testkey123` (RK3576) / `--api-key ""`
+(RK3588, no key configured on that profile).
+
+Recipe (R2000): image `asrbench-rpi5-hailo-whisper:r2000b`, profile
+`rpi5-hailo-whisper` with `OVS_MAX_CONCURRENT_SESSIONS=16`, same `voxedge`
+`main` @466f3e4 wheel, HEF + decoder ONNX cached on-device, `--api-key
+testkey123`; `mcp_face_rec` stopped for the run (holds `/dev/hailo0`) and
+restarted after.
 
 ## SenseVoice (zh), 100 AISHELL-1 S0002 segments
 
@@ -148,8 +177,10 @@ client bug above is corrected.
   `build_unified_report.py` calling `score_unified.py` once per cell (no
   numbers hand-copied from other reports).
 - `j3011-whisper-matched100-fixed.json` / `.md`,
-  `j4012-whisper-matched100-fixed.json` / `.md` — raw `bench.py` output
-  (post-#95 client) used for the Whisper rows above.
+  `j4012-whisper-matched100-fixed.json` / `.md`,
+  `rk3576-whisper-matched100-fixed.json`, `rk3588-whisper-matched100-fixed.json`,
+  `r2000-whisper-matched100-fixed.json` — raw `bench.py` output (post-#95
+  client) used for the Whisper rows above.
 - `j3011-whisper-matched100-prefix-withdrawn.json` — the pre-#95 J3011 run
   (99/100 ok, 19.44% aggregate WER, cited above as withdrawn), kept as
   evidence for that comparison rather than only asserted.
