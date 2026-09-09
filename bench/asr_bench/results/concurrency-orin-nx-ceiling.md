@@ -6,7 +6,8 @@ board. Whisper's admission ceiling was previously 1 (the installed
 `voxedge==0.0.13a0` package had no `max_concurrent` field on
 `WhisperASRConfig`); with a wheel built from `voxedge` `main` (466f3e4,
 unreleased) the ceiling now follows the profile, and the sweep below finds a
-serialized-decode-queue ceiling of 8, the same recommendation as J3011.
+serialized-decode-queue ceiling of 8 — above that, confirmed audio
+truncation, not just added latency — the same recommendation as J3011.
 
 ## SenseVoice (zh)
 
@@ -99,20 +100,37 @@ Zero errors at every level tested (c=24/32 were not run — see below). p95
 holds in a 0.69-1.06 s band through c=8, then jumps to 5.76 s at c=16 (5.4x
 c=8's) — the same serialized-CPU-KV-cache-decode queueing pattern as J3011;
 this board's larger GPU/CPU headroom does not move the onset meaningfully.
-The aggregate WER also rises with concurrency (3.62% at c=1 to 16.07% at
-c=16), but as on J3011 this is a corpus-composition effect, not a confirmed
-concurrency effect: the items common to every level (the c=1 corpus is a
-prefix of every larger `--limit`) were not independently re-checked for
-per-item stability on this board, but J3011's matched-item check found
-byte-identical decode at every concurrency level for the items shared
-across all levels — the aggregate rise there was ordinary corpora growth
-pulling in harder items at higher `--limit`, not queueing corrupting
-decodes. The same mechanism (one CPU decode path serializing all sessions)
-applies to both boards, so the same caveat is assumed to hold here, though
-it was not independently verified on this board.
-**Recommended admission ceiling: 8** — the highest level tested whose p95
-stays under the 1.5 s bar; c=16 already shows a wide margin past the ceiling
-so c=24/c=32 were not run.
+
+**Accuracy is also confirmed to degrade under load on this board**, checked
+the same way as J3011: a follow-up c=1 run against the identical 64-item
+corpus subset used at c=16 (`docker restart` first, `effective_limit=64`
+reconfirmed).
+
+- **c=4 and c=8 are clean**: every item shared with the c=1/64 baseline (24
+  items at c=4, 40 at c=8) scores byte-identical `err` — zero degradation at
+  the levels this report recommends.
+- **c=16 shows real, confirmed defects**: 11 of the 64 shared items score
+  differently at c=16 than at c=1 for the same audio. Example (`en_pub_22`,
+  ref "THEY WERE CERTAINLY NO NEARER THE SOLUTION OF THEIR PROBLEM"): c=1
+  transcribes the full sentence ("there were certainly no near the solution
+  of their problem.", `pre_eos_finals=1`) while c=16 for the identical
+  segment returns just `"there were certainly no"` (`pre_eos_finals=0`) —
+  the same early-finalization/truncation-under-queueing mechanism confirmed
+  on J3011. Two more matched examples: `en_pub_29` (c=1 gives a full two-
+  sentence transcript, c=16 cuts it after the first sentence) and
+  `en_pub_62` (c=1 includes a trailing "[BLANK_AUDIO]" tag that c=16's
+  earlier finalization drops). This confirms the defect is not board-
+  specific to J3011.
+- The aggregate WER trend (3.62% at c=1 to 16.07% at c=16) is therefore a
+  mix of corpus composition (harder items entering at higher `--limit`,
+  which score identically regardless of concurrency at c=4/c=8) and the
+  confirmed truncation defect that appears at c=16, isolated by the
+  matched-item comparison above.
+
+**Recommended admission ceiling: 8** — the highest level tested that is
+confirmed clean on both latency (p95 under the 1.5 s bar) and accuracy (zero
+matched-item degradation vs the c=1 baseline); c=16 is confirmed unsafe on
+both axes, not just slow, so c=24/c=32 were not run.
 
 
 ## Files
