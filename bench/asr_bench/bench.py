@@ -226,6 +226,7 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
             first_final_at = None
             stream_closed = False
             close_error = None
+            server_error = None
             deadline = eos_at + 40
             # A gap cap, applied only once something has arrived. Before the
             # first final the whole deadline is available, so a slow decode is
@@ -248,6 +249,15 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
                     msg = json.loads(raw)
                 except (TypeError, ValueError):
                     continue
+                # The server's terminal error frame carries is_final too
+                # (server/main.py), and ``busy`` means the utterance was
+                # dropped for backpressure. Either way this segment has no
+                # transcript; recording it as a result would score an empty
+                # or partial string as if the run had succeeded.
+                kind = msg.get("type")
+                if kind in ("error", "busy"):
+                    server_error = f"server sent {kind}: {msg.get('reason') or msg.get('text') or ''}".strip()
+                    continue
                 if not msg.get("is_final"):
                     continue
                 if first_final_at is None:
@@ -257,9 +267,11 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
             eos_to_final_ms = ((first_final_at or time.perf_counter()) - eos_at) * 1000
             joiner = "" if lang == "zh" else " "
             text = joiner.join([t for t in (*pre_eos_finals, *post_eos_finals) if t])
-            # Complete means the server sent at least one final AND closed the
-            # stream, which it does only after the segment's own EOS final.
-            complete = first_final_at is not None and stream_closed
+            # Complete means the server sent at least one final, sent no error
+            # or busy frame, and closed the stream without an error code —
+            # which it does only after the segment's own EOS final.
+            complete = (first_final_at is not None and stream_closed
+                        and server_error is None)
             err = error_rate(ref, text, lang)
             rtf = (eos_to_final_ms / 1000.0) / duration_s if duration_s > 0 else float("nan")
             return SegmentResult(
@@ -267,7 +279,7 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
                 feed_wall_ms=feed_wall_ms, eos_to_final_ms=eos_to_final_ms,
                 rtf=rtf, text=text, ref=ref, err=err, ok=complete,
                 error=None if complete else (
-                    close_error or (
+                    server_error or close_error or (
                         "no final message before deadline" if first_final_at is None
                         else "server did not close the stream after EOS; the "
                              "transcript may be incomplete")),

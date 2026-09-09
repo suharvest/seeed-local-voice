@@ -171,3 +171,21 @@ def test_a_slow_first_final_is_not_cut_off_by_the_gap_cap(monkeypatch):
                   gap=0.2)
     assert res.ok
     assert res.text == "slow"
+
+
+def test_a_terminal_error_frame_is_not_scored_as_a_result(monkeypatch):
+    """server/main.py's error frame carries is_final. Counting it as the
+    segment's transcript reports an empty string as a successful run."""
+    res, _ = _run(monkeypatch, [], [{"type": "error", "text": "", "is_final": True,
+                                     "reason": "backend_unavailable"}])
+    assert not res.ok
+    assert "server sent error" in (res.error or "")
+
+
+def test_a_busy_frame_is_not_scored_as_a_result(monkeypatch):
+    """busy means the utterance was dropped for backpressure — no transcript."""
+    after = [{"type": "busy", "reason": "asr_queue_full", "endpoint": "eos"},
+             {"type": "final", "text": "", "is_final": True}]
+    res, _ = _run(monkeypatch, [], after, server_vad=True)
+    assert not res.ok
+    assert "asr_queue_full" in (res.error or "")

@@ -7,8 +7,8 @@ board. Whisper's admission ceiling was previously 1 (the installed
 `WhisperASRConfig`); with a wheel built from `voxedge` `main` the ceiling now
 follows the profile. Whisper transcribes identically at c=1, 8, 16 and 24 —
 0 of 72 items differ from c=1 and WER is byte-identical at every level — so
-its ceiling is set by latency alone: p95 is under 1 s through c=8, 1.39 s at
-c=16, 2.34 s at c=24. The shorter-transcript effect reported here previously
+its ceiling is set by latency alone: p95 is 1.07 s at c=8, 1.18 s at c=16 and
+2.20 s at c=24. The shorter-transcript effect reported here previously
 was a bench-client defect (two endpoint detectors racing), fixed in
 `bench/asr_bench/bench.py`; see the Whisper section.
 
@@ -85,7 +85,7 @@ post_eos +2569.8 ms  final               "return to its place amidst the tents."
 ```
 
 The client kept `"Concorde."` and dropped the rest. `probe_frames.py`
-captured every frame of that c=24 run and of a c=1 run over the same items:
+recorded the frames of that c=24 run and of a c=1 run over the same items:
 of the 24 items common to both, 4 differed, each a strict prefix of its c=1
 text, and for all 4 the join of every final captured at c=24 equals the join
 of every final captured at c=1. The sweep below is rerun with the fixed

@@ -114,7 +114,8 @@ serializes Whisper decode behind one CPU KV-cache path
 (`execution_policy.mode: concurrent` is declared but the backend still runs
 one decode at a time; see `voxedge/backends/whisper/asr.py`), so admission
 concurrency above the decode's real throughput turns into queueing, not
-parallel work.
+parallel work. How much of the latency growth in this table is that queueing
+and how much is the client's first-final exit is not separated by this data.
 
 **The accuracy finding previously recorded here is withdrawn.** It was
 collected with a bench client that opened `/asr/stream` with the server

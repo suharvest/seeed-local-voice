@@ -50,11 +50,8 @@ async def one(url, item, seg_dir, chunk_bytes, realtime, vad_none):
                 break
             m = json.loads(raw)
             frames.append({"phase": "post_eos", "t_rel_eos_ms": (time.perf_counter()-eos)*1000, "msg": m})
-            if m.get("is_final"):
-                if first_final_after_eos is None:
-                    first_final_after_eos = m.get("text", "")
-                if m.get("type") == "final" and not m.get("endpoint"):
-                    break
+            if m.get("is_final") and first_final_after_eos is None:
+                first_final_after_eos = m.get("text", "")
     joiner = "" if item["lang"] == "zh" else " "
     bench_text = joiner.join([t for t in (*pre, first_final_after_eos or "") if t])
     all_finals = [f["msg"]["text"] for f in frames
