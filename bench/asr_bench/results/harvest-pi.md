@@ -97,14 +97,27 @@ correct endpoint for this backend.
 
 ## SenseVoice zh results (`POST /asr`, 20-item AISHELL-1 subset)
 
+This is the same 20-item AISHELL-1 subset (`bench/asr_bench/corpus/manifest.json`)
+used in the `radxa` (RK3588) report's SenseVoice pass
+(`bench/asr_bench/results/radxa.md`, mean CER 5.99% at c=1) — the two CER
+numbers are directly comparable: same corpus, same reference text, same
+`jiwer` CER logic, different backend/quantization (RK3588 RKNN fp16-scaled
+vs this device's CPU `sherpa_asr`).
+
 ### Pass 1 — profile default (`max_concurrent_sessions=1`, server-enforced)
 
-| concurrency | ok/20 | latency p50 (ms) | latency p95 (ms) | RTF p50 | mean CER |
-|---|---|---|---|---|---|
-| 1 | 20 | 768 | 1183 | 0.128 | 14.6% |
-| 2 | 5 | — | — | — | `too_many_sessions` (current=1, limit=1) on the rest |
-| 4 | 3 | — | — | — | `too_many_sessions` (current=1, limit=1) on the rest |
-| 8 | 2 | — | — | — | `too_many_sessions` (current=1, limit=1) on the rest |
+| concurrency | ok/20 | latency p50 (ms) | latency p95 (ms) | RTF p50 | RTF p95 | mean CER (successful segments) |
+|---|---|---|---|---|---|---|
+| 1 | 20 | 768 | 1183 | 0.128 | 0.161 | 14.6% |
+| 2 | 5 | 820 | 982 | 0.129 | 0.134 | 14.8% (n=5) — remaining 15 rejected with `too_many_sessions` (current=1, limit=1) |
+| 4 | 3 | 818 | 968 | 0.153 | 0.183 | 19.9% (n=3) — remaining 17 rejected with `too_many_sessions` (current=1, limit=1) |
+| 8 | 2 | 1078 | 1078 | 0.156 | 0.156 | 9.3% (n=2) — remaining 18 rejected with `too_many_sessions` (current=1, limit=1) |
+
+The c=2/4/8 CER figures above are computed over only the 1-5 sessions the
+server admitted before rejecting the rest with `too_many_sessions`; the
+sample size is too small (n=2 to n=5) to read as a concurrency effect on
+accuracy — see Pass 2 for the CER-vs-concurrency comparison that actually
+holds sample size constant (n=20 or n=4 per level).
 
 `results/harvest-pi-sensevoice-zh-offline.json`.
 
@@ -128,7 +141,7 @@ instances). Re-ran the sweep against this limit:
 | 1 | 20 | 736 | (14536 outlier, see note) | 0.123 | 2.42 | 14.6% |
 | 2 | 20 | 874 | 1413 | 0.145 | 0.177 | 14.6% |
 | 4 | 20 | 1539 | 2940 | 0.281 | 0.315 | 14.6% |
-| 8 | 4/20 | 1446 | 1571 | 0.448 | 0.560 | `too_many_sessions` (current=4, limit=4) on the other 16 |
+| 8 | 4/20 | 1446 | 1571 | 0.448 | 0.560 | 20.6% (n=4) — remaining 16 rejected with `too_many_sessions` (current=4, limit=4) |
 
 `results/harvest-pi-sensevoice-zh-offline-limit4.json`. The c=1 p95 outlier
 (14.5 s on one segment) coincides with the first request after container
@@ -138,11 +151,14 @@ contention degradation** (latency scales roughly linearly with concurrency,
 no errors) that the profile description predicted, up to the
 backend-declared ceiling of 4, where the 5th+ concurrent request is
 rejected with `429`/`too_many_sessions` rather than queued or degraded
-further. CER is identical (14.6%) across all levels and passes — as
-expected, since it is the same 20-item corpus and the same deterministic
-model; almost all of that CER is Arabic- vs Chinese-numeral normalization
-in the reference text, not real ASR errors (same caveat as the RK3576 smoke
-test in the matrix doc).
+further. At c=1/2/4 (n=20 each), CER is identical (14.6%) — as expected,
+since it is the same 20-item corpus and the same deterministic model; almost
+all of that CER is Arabic- vs Chinese-numeral normalization in the reference
+text, not real ASR errors (same caveat as the RK3576 smoke test in the
+matrix doc). At c=8 the 4 successful segments show 20.6% CER; with n=4 this
+is consistent with normal item-to-item variance in this corpus rather than
+a concurrency-driven accuracy loss, but the sample is too small to rule
+that out.
 
 **Conclusion for SenseVoice on this device**: concurrency 1 is the safe
 default (server-pinned); concurrency up to 4 works with linear latency
