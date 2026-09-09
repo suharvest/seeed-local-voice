@@ -19,18 +19,38 @@ sweep at the time of this pass) and will land as a follow-up.
 
 `bench.py` prior to PR #95 opened `/asr/stream` without `?vad=none` while
 also sending an EOS frame, so the server's own VAD and the client's EOS both
-tried to endpoint the same utterance; under load the server could split an
-utterance and deliver a mid-utterance final that the client's
-first-`is_final`-wins collection scored as the whole segment. This pass
-started with pre-#95 client runs (J3011 aggregate WER measured at 19.44%
-with 70/100 unified-corpus segments showing `pre_eos_finals>0`; J4012 and
-R2000's already-existing matched-100 runs showed 72/100 and 61/100
-respectively) — all three withdrawn and superseded by reruns on the
-post-#95 client (rebased onto `438e0a4b`, which pins `?vad=none` and
-accumulates every final until the server closes the stream). The SenseVoice
-numbers below were not affected: checking `pre_eos_finals` on the unified
-100-id subset in each of the 5 source JSONs shows 0 nonzero entries in every
-one.
+tried to endpoint the same utterance. After sending EOS, the pre-#95 client
+took the *first* `is_final` it received as the segment's result and stopped
+reading; if the server queued a second, later final for the same utterance
+(the real end-of-speech one), that text was silently dropped and the first
+fragment was scored as the whole segment (see PR #95's commit message for a
+frame-level trace). PR #95 (`438e0a4b`, now in this branch) fixes this by
+pinning `?vad=none` (removing the server VAD as a second detector) and
+reading until the server closes the stream, accumulating every final it
+sends instead of stopping at the first.
+
+This pass started with pre-#95 client runs on J3011 (`en_pub_*` matched-100
+corpus, aggregate WER measured at 19.44%) and reused J4012/R2000's
+already-existing matched-100 runs (19.06%/23.00%), all recorded before
+`438e0a4b` existed. All three are withdrawn here and J3011/J4012 are rerun
+on the post-#95 client (100/100 ok on both, see table below); R2000's rerun
+is out of scope for this PR (see "Note on scope").
+
+Note on the `pre_eos_finals` counter: this field counts finals the client
+drains **before** sending EOS (mid-feed VAD chatter) and exists unchanged in
+both the pre- and post-#95 client — it does not indicate the post-EOS
+first-final-wins bug PR #95 fixed, and a `0` value does not prove a given
+historical run was unaffected by it (the old client never recorded how many
+finals arrived *after* EOS, which is the count that would matter). It is
+reported below only as a description of what each recorded run contains,
+not as evidence for or against the race having occurred in it. The evidence
+this report relies on for Whisper is the direct before/after WER comparison
+on J3011 (19.44% pre-fix -> 7.62% post-fix, same board, same corpus); for
+SenseVoice, the evidence that concurrency-related races are not a live
+concern for this backend is the previously-documented flat CER across
+concurrency levels (`concurrency-orin-nano-ceiling.md`: unchanged at every
+level from c=8 to c=48 on the 200-item corpus), not the `pre_eos_finals`
+count.
 
 ## Corpus
 
@@ -70,11 +90,13 @@ the unified 100-id list.
 | J3011 (Jetson Orin Nano 8GB Super) | TensorRT bf16 encoder, CPU ONNX KV decoder | 100/100 | **7.62%** | 8.86% | 0.00% |
 | J4012 (Jetson Orin NX 16GB Super) | TensorRT bf16 encoder, CPU ONNX KV decoder | 100/100 | **7.62%** | 8.86% | 0.00% |
 
-Both zero-error, both `pre_eos_finals=0` on every one of the 100 segments,
-and mean WER agrees to 14 significant figures (0.08858982683982683 vs
-0.08858982683982684) — expected, since both boards run the identical
-`enc_base_30s_bf16.plan` TensorRT engine reused unchanged from each board's
-own model cache (not rebuilt this pass) plus the same CPU ONNX KV decoder.
+Both zero-error, both `pre_eos_finals=0` on every one of the 100 segments
+(no mid-feed VAD chatter drained before EOS on either board — see the note
+above on what this counter does and does not indicate), and mean WER agrees
+exactly (0.08858982683982684 on both, per `accuracy-unified-corpus.json`) —
+expected, since both boards run the identical `enc_base_30s_bf16.plan`
+TensorRT engine reused unchanged from each board's own model cache (not
+rebuilt this pass) plus the same CPU ONNX KV decoder.
 
 Recipe: image `sensecraft-missionpack.seeed.cn/solution/seeed-local-voice:v0.9.0-ondemand-20260721c`
 with `server/`+`configs/` bind-mounted from this branch and `voxedge`
@@ -95,9 +117,11 @@ across concurrency levels (`concurrency-orin-nano-ceiling.md`: SenseVoice
 CER unchanged at every level from c=8 to c=48 on the 200-item corpus), so
 these are not expected to move at c=1, but that has not been independently
 re-verified for every board in this pass. `pre_eos_finals` on the unified
-100-id subset is 0 for all 100 segments on all 5 devices — the endpoint-race
-bug the Whisper section above describes did not manifest in any of these
-SenseVoice runs.
+100-id subset is 0 for all 100 segments on all 5 devices (no mid-feed VAD
+chatter drained before EOS); per the note above, this counter does not by
+itself indicate whether the post-EOS race affected these runs — the
+evidence that SenseVoice is not a live concern here is the previously
+established flat CER across concurrency levels, not this counter.
 
 | Device | Backend | Concurrency used | Aggregate CER | Mean CER | p50 CER |
 |---|---|---|---|---|---|
@@ -126,5 +150,8 @@ client bug above is corrected.
 - `j3011-whisper-matched100-fixed.json` / `.md`,
   `j4012-whisper-matched100-fixed.json` / `.md` — raw `bench.py` output
   (post-#95 client) used for the Whisper rows above.
+- `j3011-whisper-matched100-prefix-withdrawn.json` — the pre-#95 J3011 run
+  (99/100 ok, 19.44% aggregate WER, cited above as withdrawn), kept as
+  evidence for that comparison rather than only asserted.
 - `whisper100_ids.txt` / `sensevoice100_ids.txt` — the exact 100 ids that
   define each unified subset, one per line.
