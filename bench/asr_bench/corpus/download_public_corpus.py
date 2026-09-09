@@ -40,8 +40,27 @@ def hf_url(repo: str, path: str) -> str:
 
 
 def download(url: str, dest: Path) -> None:
+    """Fetch to a .part file and rename only on success.
+
+    Callers treat "the file exists" as "the file is complete", so a timeout or
+    an HTTP error page written straight to the final name poisons the cache
+    for every later run. `--fail` makes curl exit non-zero on 4xx/5xx instead
+    of saving the error body.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["curl", "-sL", "--max-time", "300", "-o", str(dest), url], check=True)
+    tmp = dest.with_name(dest.name + ".part")
+    tmp.unlink(missing_ok=True)
+    try:
+        subprocess.run(
+            ["curl", "-sSL", "--fail", "--max-time", "300", "-o", str(tmp), url],
+            check=True,
+        )
+        if tmp.stat().st_size == 0:
+            raise RuntimeError(f"empty download: {url}")
+        tmp.replace(dest)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def build_zh(limit: int, speaker: str, out_dir: Path, manifest_files: list[dict]) -> None:

@@ -82,28 +82,40 @@ def load_pcm16(path: Path) -> bytes:
 # ---------------------------------------------------------------------------
 
 def error_rate(ref: str, hyp: str, lang: str) -> float:
+    """CER for zh, WER for en, both after the same normalization on both sides.
+
+    English references in LibriSpeech are uppercase and unpunctuated while ASR
+    hypotheses carry ordinary casing and punctuation. Scoring them as-is
+    charges every capital letter and every period as a recognition error
+    (`HELLO WORLD` vs `Hello world.` scores WER 1.0), so case, punctuation and
+    repeated whitespace are removed from reference and hypothesis alike before
+    tokenization.
+    """
+    if jiwer is None:
+        raise SystemExit(
+            "jiwer is required for CER/WER scoring (declared in pyproject.toml). "
+            "Install it — `uv sync` — instead of falling back to a different metric."
+        )
     ref = ref.strip()
     hyp = hyp.strip()
     if not ref:
         return 0.0
-    if jiwer is not None:
-        if lang == "zh":
-            tr = jiwer.Compose([
-                jiwer.RemoveWhiteSpace(replace_by_space=""),
-                jiwer.RemovePunctuation(),
-                jiwer.ReduceToListOfListOfChars(),
-            ])
-            return jiwer.cer(ref, hyp, reference_transform=tr, hypothesis_transform=tr)
-        return jiwer.wer(ref, hyp)
-    # naive fallback: character-level edit distance
-    a, b = list(ref), list(hyp)
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i]
-        for j, cb in enumerate(b, 1):
-            cur.append(min(prev[j] + 1, cur[-1] + 1, prev[j - 1] + (ca != cb)))
-        prev = cur
-    return prev[-1] / max(1, len(a))
+    if lang == "zh":
+        tr = jiwer.Compose([
+            jiwer.ToLowerCase(),
+            jiwer.RemovePunctuation(),
+            jiwer.RemoveWhiteSpace(replace_by_space=""),
+            jiwer.ReduceToListOfListOfChars(),
+        ])
+        return jiwer.cer(ref, hyp, reference_transform=tr, hypothesis_transform=tr)
+    tr = jiwer.Compose([
+        jiwer.ToLowerCase(),
+        jiwer.RemovePunctuation(),
+        jiwer.RemoveMultipleSpaces(),
+        jiwer.Strip(),
+        jiwer.ReduceToListOfListOfWords(),
+    ])
+    return jiwer.wer(ref, hyp, reference_transform=tr, hypothesis_transform=tr)
 
 
 # ---------------------------------------------------------------------------
@@ -123,17 +135,24 @@ class SegmentResult:
     err: float
     ok: bool
     error: str | None = None
+    # Number of `is_final` messages the server had already emitted before EOS.
+    # Non-zero means decoding overlapped feeding, so `rtf` for that segment is
+    # not a decode-only figure.
+    pre_eos_finals: int = 0
 
 
 async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int, realtime: bool) -> SegmentResult:
-    wav_path = segments_dir / item["filename"]
-    pcm = load_pcm16(wav_path)
-    duration_s = float(item["duration_s"])
+    duration_s = float(item.get("duration_s") or 0.0)
     ref = item.get("eval_transcript") or item["transcript"]
     lang = item["lang"]
     ws_url = f"{url.rstrip('/')}/asr/stream?language=auto&sample_rate=16000"
 
     try:
+        # Decoding/resampling is blocking work; keep it off the event loop so a
+        # concurrent sweep is not serialized by it, and keep it inside the
+        # handler so one missing or corrupt WAV cannot abort the whole run.
+        wav_path = segments_dir / item["filename"]
+        pcm = await asyncio.to_thread(load_pcm16, wav_path)
         async with websockets.connect(ws_url, max_size=None, open_timeout=15) as ws:
             feed_start = time.perf_counter()
             bytes_per_ms = 16000 * 2 / 1000.0  # 16-bit mono @16kHz
@@ -146,6 +165,24 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
                     elapsed = (time.perf_counter() - t0) * 1000
                     await asyncio.sleep(max(0.0, (chunk_ms - elapsed) / 1000))
             feed_wall_ms = (time.perf_counter() - feed_start) * 1000
+
+            # Drain whatever the server already queued while audio was being
+            # fed. Without this, an endpoint that emits a final mid-feed has
+            # that message dequeued after EOS and mistaken for the segment's
+            # own result: its text alone is scored, and eos_to_final_ms
+            # measures a queue read rather than decoding.
+            pre_eos_finals: list[str] = []
+            while True:
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=0.01)
+                except (asyncio.TimeoutError, TimeoutError):
+                    break
+                try:
+                    msg = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+                if msg.get("is_final") and msg.get("text"):
+                    pre_eos_finals.append(msg["text"])
 
             eos_at = time.perf_counter()
             await ws.send(b"")  # empty frame = end-of-segment
@@ -161,7 +198,9 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
                     final_msg = msg
                     break
             eos_to_final_ms = (time.perf_counter() - eos_at) * 1000
-            text = (final_msg or {}).get("text", "")
+            tail = (final_msg or {}).get("text", "")
+            joiner = "" if lang == "zh" else " "
+            text = joiner.join([t for t in (*pre_eos_finals, tail) if t])
             err = error_rate(ref, text, lang)
             rtf = (eos_to_final_ms / 1000.0) / duration_s if duration_s > 0 else float("nan")
             return SegmentResult(
@@ -169,6 +208,7 @@ async def run_segment(url: str, item: dict, segments_dir: Path, chunk_bytes: int
                 feed_wall_ms=feed_wall_ms, eos_to_final_ms=eos_to_final_ms,
                 rtf=rtf, text=text, ref=ref, err=err, ok=final_msg is not None,
                 error=None if final_msg is not None else "no final message before deadline",
+                pre_eos_finals=len(pre_eos_finals),
             )
     except Exception as exc:  # noqa: BLE001 — record and continue, don't crash the run
         return SegmentResult(

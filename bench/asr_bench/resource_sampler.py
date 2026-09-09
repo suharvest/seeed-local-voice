@@ -69,12 +69,31 @@ def read_rknpu_load() -> str | None:
 
 
 def read_tegrastats_once() -> str | None:
+    """Read one tegrastats line.
+
+    tegrastats has no `--count`: it prints forever until stopped. Start it,
+    take the first line, then terminate and reap it, so neither the sample nor
+    the process is lost. stderr is kept out of the CSV so an error message
+    cannot be recorded as utilization data.
+    """
+    proc = None
     try:
-        out = subprocess.run(["tegrastats", "--interval", "200", "--count", "1"],
-                              capture_output=True, text=True, timeout=3)
-        return out.stdout.strip() or None
+        proc = subprocess.Popen(
+            ["tegrastats", "--interval", "200"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+        line = proc.stdout.readline().strip() if proc.stdout else ""
+        return line or None
     except Exception:
         return None
+    finally:
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
 
 
 def main() -> int:

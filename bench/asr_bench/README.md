@@ -38,12 +38,17 @@ script already drives the service.
 - **Final latency** = wall time from the empty EOS frame to the `is_final`
   message (ms). Not the same as "audio duration + decode time" — see the
   RTF note below.
-- **RTF** = `final_latency_s / audio_duration_s`. This is a *decode-only*
-  RTF proxy (the segment was already fully fed before EOS), not a true
-  end-to-end streaming RTF. It is comparable across devices/models because
-  it uses the same definition everywhere.
+- **RTF** = `final_latency_s / audio_duration_s`. It is a decode-only RTF
+  proxy only when the profile emits nothing before EOS. A profile that
+  finalizes mid-feed has already done part of the decoding by then; each
+  segment record carries `pre_eos_finals`, the count of `is_final` messages
+  seen before EOS, so those rows are identifiable. It uses the same
+  definition everywhere, so it is comparable across devices/models.
 - **CER/WER** via `jiwer` (character-level for zh, word-level for en),
-  reference text from the corpus manifest.
+  reference text from the corpus manifest. Case, punctuation and repeated
+  whitespace are removed from reference and hypothesis alike before scoring,
+  so an uppercase unpunctuated LibriSpeech reference is not charged an error
+  per capital letter and per period.
 - **Concurrency** sweep: N independent WebSocket sessions pull segments off
   a shared queue; per-run p50/p95 latency, error count, and aggregate
   throughput (segments/s and audio-seconds/wall-second) are reported so you
@@ -121,6 +126,7 @@ python3 resource_sampler.py --out /tmp/res.csv --interval 1 --duration 180      
   this pass; `resource_sampler.py --accel` has no `hailo` option yet. Add
   one only after verifying a real sysfs/hailortcli hook on-device — do not
   guess a path.
-- `error_rate` uses `jiwer`'s default English normalization for `en` and a
-  whitespace/punctuation-stripped character-level comparison for `zh`; it is
-  not tuned per-corpus beyond that.
+- `error_rate` lowercases and strips punctuation on both sides, then scores
+  word-level for `en` and character-level for `zh`; it is not tuned
+  per-corpus beyond that. `jiwer` is required — without it the script exits
+  rather than reporting a different metric under the same name.
