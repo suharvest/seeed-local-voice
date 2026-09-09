@@ -118,3 +118,52 @@ Sampled `/sys/kernel/debug/rknpu/load` every 2 s for 50 s during the after run:
 Core0 peaks at 59% and Core1 never leaves 0% — the second NPU core is unused,
 because the profile pins `NPU_CORE_0` and rkvoice-stream holds one RKNN
 context. That is the remaining ceiling and what stage a would address.
+
+## c=12 / c=16 — admission ceiling raised to 16
+
+Date: 2026-09-09. Same image (`openvoicestream:rk-20260903.10`) with the same
+four stageb files bind-mounted as the "after" run above, plus
+`ASR_MAX_SESSIONS=16 -e OVS_MAX_CONCURRENT_SESSIONS=16`. Startup log:
+
+```
+SessionLimiter initialized: effective_limit=16 (env OVS_MAX_CONCURRENT_SESSIONS='16', profile.max_concurrent_sessions=None)
+ASR inference gate: concurrency=1 max_waiting=15
+ASR locking granularity: sentence (asr sessions=16, in-flight=1, queue depth=15, mode=serialized)
+ASR executor: max_workers=16 (source=asr_cap.max_concurrent)
+```
+
+Same corpus (20 zh items), same client (`bench.py` from the Mac over
+Tailscale). No other container held the NPU during this run
+(`docker ps -a` showed the three exited containers from before/after only).
+
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | CER |
+|---|---|---|---|---|---|---|---|---|---|
+| 12 | 20 | 20 | 0 | 2093.5 | 3619.3 | 0.395 | 0.640 | 1.08 | 0.0599 |
+| 16 | 20 | 20 | 0 | 3940.9 | 5659.5 | 0.549 | 0.915 | 1.13 | 0.0599 |
+
+- Zero errors at both levels — the queue (max_waiting=15 at c=16) still fits
+  every simultaneous endpoint without overflowing, same pattern as c=8.
+- p95 crosses 1.5 s well before c=12: 3619 ms at c=12, 5660 ms at c=16. This
+  device has not hit an admission or error ceiling by c=16 — CPU/NPU queueing
+  is the limit, not the session limiter. The single NPU core (`NPU_CORE_0`,
+  the other core still unused — see occupancy below) serializes 16 requests'
+  worth of inference behind one context, so tail latency increased in these
+  runs (p95 +886 ms from c=8 to c=12, +2040 ms from c=12 to c=16); no wall
+  was hit up to 16.
+- CER is 0.0599 at c=12 and c=16, matching the after/repeat-fix rows above
+  and the before c=1 row; the before c=2/4/8 rows report 0.0667 on a
+  much smaller surviving sample (1 of 20 segments), so this comparison is
+  scoped to the successful (20/20) runs.
+- Throughput: 1.08 seg/s at c=12, 1.13 seg/s at c=16 — up from 0.87 seg/s at
+  c=8, but the marginal gain per added session is shrinking (c=8→12 added 4
+  sessions for +0.21 seg/s, c=12→16 added 4 sessions for +0.05 seg/s). That
+  is consistent with the single-core NPU approaching a throughput ceiling,
+  but two 20-item runs are not enough to confirm saturation — a hypothesis,
+  not an established ceiling.
+
+NPU occupancy sampled every 2 s for 240 s spanning both runs
+(`/sys/kernel/debug/rknpu/load`, 120 samples): 105 samples at 0% (both cores
+idle, between/before/after the two bursts), 15 samples with Core0 active
+(58-80%, single peak per ~2 s poll — consistent with one core serializing
+back-to-back inferences), Core1 at 0% throughout. The second core is still
+never used at c=16, same finding as the after-run above.
