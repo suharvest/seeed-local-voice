@@ -107,10 +107,10 @@ against the pre-test list.
 
 | Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | RTF p50 | Throughput (seg/s) | WER |
 |---|---|---|---|---|---|---|---|---|
-| 1  | 72 | 72 | 0 | 404.3  | 924.2  | 0.082 | 0.14 | 4.98% |
-| 8  | 72 | 72 | 0 | 450.0  | 838.5  | 0.083 | 1.06 | 4.98% |
-| 16 | 72 | 72 | 0 | 546.2  | 1387.8 | 0.110 | 1.90 | 4.98% |
-| 24 | 72 | 72 | 0 | 1096.3 | 2336.5 | 0.169 | 2.32 | 4.98% |
+| 1  | 72 | 72 | 0 | 377.6 | 753.4  | 0.079 | 0.14 | 4.98% |
+| 8  | 72 | 72 | 0 | 483.5 | 1068.4 | 0.097 | 1.05 | 4.98% |
+| 16 | 72 | 72 | 0 | 583.8 | 1176.7 | 0.105 | 1.89 | 4.98% |
+| 24 | 72 | 72 | 0 | 892.7 | 2195.1 | 0.153 | 2.33 | 4.98% |
 
 Zero errors at every level. **No accuracy change with concurrency**: 0 of 72
 items transcribe differently at c=8, c=16 or c=24 than at c=1, and
@@ -118,10 +118,10 @@ items transcribe differently at c=8, c=16 or c=24 than at c=1, and
 `pre_eos_finals` is 0 for every item at every level — with `?vad=none` the
 client's EOS frame is the only endpoint, so nothing is emitted mid-feed.
 
-What moves with concurrency is latency. p95 holds under 1 s through c=8, is
-1.39 s at c=16 and 2.34 s at c=24; aggregate throughput keeps rising
-(6.7x real time at c=8, 14.7x at c=24), which is the serialized CPU KV-cache
-decode being kept busy by a deeper queue.
+What moves with concurrency is latency. p95 is 753 ms at c=1, 1.07 s at c=8,
+1.18 s at c=16 and 2.20 s at c=24, while aggregate throughput keeps rising
+(6.7x real time at c=8, 14.7x at c=24) — the serialized CPU KV-cache decode
+kept busy by a deeper queue.
 
 **Recommended admission ceiling: 16** — the highest level tested with p95
 under 1.5 s. c=24 stays correct and error-free and roughly doubles p95, so it
