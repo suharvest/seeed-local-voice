@@ -26,10 +26,12 @@ The actual cause: the container that produced the bad numbers
 (`ovs-sv-test`) was running **voxedge 0.0.8a0**. Isolating it — every other
 container stopped, `ovs-sv-test` alone on the board, same profile
 (`asr_max_slots=8`, `execution_policy.mode=serialized`), same c=8 bench —
-reproduced degenerate latency: p50 1091 ms / p95 3494 ms (see
-`concurrency-orin-nano-isolate-c8-oldvoxedge.json` in this directory). Zero
-other containers were running. The regression is in that voxedge build, not
-in device contention.
+reproduced high latency with zero errors: p50 1091 ms / p95 3494 ms, 20/20
+segments OK (see `concurrency-orin-nano-isolate-c8-oldvoxedge.json` in this
+directory). With every other container stopped, bad latency persists —
+that rules out other-container contention as the cause of the bad latency,
+though it does not by itself prove voxedge 0.0.8a0 is the only contributing
+factor, since the fix below also changes other things at once.
 
 Redeploying openvoicestream `main` with **voxedge 0.0.13a0** (pip-installed
 over the image's stock 0.0.5a0, plus `sentencepiece` and `kaldi_native_fbank`
@@ -37,12 +39,15 @@ which that backend needs and the older environment lacked) on the identical
 board, identical `jetson.sensevoice_trt` backend, identical
 `execution_policy.mode=serialized` (the backend still declares
 `supports_parallel=False` — one TensorRT execution context, admission-only
-concurrency, by design, see `sensevoice_trt.py`) fixes it: p95 stays under
-200 ms through c=16. `tegrastats` during this run shows GR3D_FREQ reaching
-98-99% — the GPU is now actually busy, versus 31% in the broken run — meaning
-the old build's bottleneck was software overhead around the inference call
-(not memcpy/context-recreation profiled further; the version bump alone
-removed it), not the GPU itself.
+concurrency, by design, see `sensevoice_trt.py`) is the deployment that
+fixed it: p95 stays under 200 ms through c=16. `tegrastats` during this run
+shows GR3D_FREQ reaching 98-99%, versus 31% in the broken run. This redeploy
+also bumped the admission ceiling from 8 to 16 and reinstalled
+`sentencepiece`/`kaldi_native_fbank`, so voxedge 0.0.8a0 is the prime
+suspect and the isolation test rules out container contention, but a
+controlled voxedge-version-only comparison (same image, same admission
+ceiling, only the pip package swapped) was not run and would be needed to
+attribute the fix to that package alone.
 
 ## Environment for this run
 
@@ -81,18 +86,19 @@ removed it), not the GPU itself.
 | 12 | 20 | 0 | 111 | 195 | 0.0237 | 0.0422 | 1.452 | 8.36 | 5.99% |
 | 16 | 20 | 0 | 127 | 186 | 0.0229 | 0.0462 | 1.669 | 9.61 | 5.99% |
 
-No errors and no failed sessions through c=16, the highest level tested.
-p95 stays in a 160-195 ms band across every concurrency level — this run did
-not find the real ceiling; it found that the *previous* number was a software
-regression, not a device limit. CER is 5.99% at every level, matching the
-earlier (broken) run and the reference offline decode — concurrency does not
-touch accuracy on this backend either way.
+Zero errors and p95 below 200 ms through c=16, the highest level tested.
+p95 stays in a 160-195 ms band across every concurrency level tested. CER
+was unchanged at 5.99% across every tested concurrency level on these 20
+utterances, matching the earlier (broken) run and the reference offline
+decode.
 
 Throughput scales close to linearly with concurrency (0.164 → 1.669
-segments/s from c=1 to c=16, a 10.2x increase for 16x the sessions),
-consistent with a single serialized execution context whose per-call latency
-is the true bottleneck and is small (order 5-10 ms of GPU time per 4-6 s
-utterance) relative to network/feed overhead.
+segments/s from c=1 to c=16, a 10.2x increase for 16x the sessions). The
+`tegrastats` samples during this run show GR3D_FREQ at 98-99% under load
+(`orin-nano-clean-tegrastats.log`); the bench measures end-to-end
+end-of-audio-to-`is_final` latency and wall-clock throughput, not per-call
+GPU kernel time, so this data does not isolate how much of each request's
+~100-200 ms is GPU compute versus VAD/feature-extraction/network overhead.
 
 ## What this run did NOT establish
 
@@ -107,7 +113,7 @@ above 16, not covered here.
 - `concurrency-orin-nano-clean.json` — full per-segment results for c=1/2/4/8/12/16.
 - `concurrency-orin-nano-isolate-c8-oldvoxedge.json` — isolation control: old
   voxedge 0.0.8a0 container (`ovs-sv-test`), c=8, all other containers
-  stopped, reproduces the 429/degenerate-latency signature (p50 1091 ms /
-  p95 3494 ms) with zero device contention.
+  stopped, reproduces the high-latency signature (p50 1091 ms / p95 3494 ms,
+  20/20 OK, zero errors) with all other containers stopped.
 - `orin-nano-clean-tegrastats.log` — 1 Hz `tegrastats` samples spanning the
   clean bench run, showing GR3D_FREQ reaching 98-99% under load.

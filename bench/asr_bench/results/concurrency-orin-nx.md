@@ -5,9 +5,10 @@ utterances for Whisper (each Apache-2.0 / CC BY 4.0, see `bench/asr_bench/README
 Transport: `/asr/stream` WebSocket, fed at 1.0x real time, one `is_final` per
 segment. Latency = audio-end to `is_final` (excludes the real-time feed).
 
-Server confirmed ready before each sweep: `SessionLimiter initialized:
-effective_limit=8` and `ASR executor: max_workers=8` both present in the
-container log.
+Server confirmed ready before each of the original c=1-8 sweeps below:
+`SessionLimiter initialized: effective_limit=8` and `ASR executor:
+max_workers=8` both present in the container log. The c=12/16 addendum
+below used `effective_limit=16` — see that section for its own confirmation.
 
 ## SenseVoice zh — profile `jetson-sensevoice`
 
