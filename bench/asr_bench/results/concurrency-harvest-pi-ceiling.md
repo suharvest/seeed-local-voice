@@ -1,94 +1,176 @@
-# harvest-pi (reComputer R2000 series, Raspberry Pi 5 + Hailo-8) — SenseVoice `/asr/stream` concurrency ceiling, 100-segment corpus
+# harvest-pi (reComputer R2000 series, Raspberry Pi 5 + Hailo-8) — SenseVoice and Whisper `/asr/stream` concurrency ceilings, 100-segment corpora
 
-Boundary: **p95 stays under 1.5 s through c=6 (1249.5 ms)**; c=8 crosses it
-(1722.8 ms). The server's own admission ceiling is 8 — every request past that
-(c=12, c=16) is rejected with `too_many_sessions`, not queued. **Recommended
-production concurrency: 6.**
+Both passes ran on an **idle board**: all ten containers that were running
+beforehand were stopped for the whole sweep and restarted afterwards.
 
-Difference from the 20-segment pass in `results/harvest-pi.md`: that pass
-reported 0 errors and p95 865.7 ms at c=4 and 2280.2 ms at c=8 from only 20
-segments per level (5 per worker at c=4, 2.5 at c=8) — too few draws for a
-stable p95, and it only swept c=1/2/4/8, never reaching the 8-session
-admission ceiling from above. `bench.py`'s workers pull from one shared queue
-(`bench/asr_bench/bench.py:232-249`), so corpus size does not by itself
-determine how many sessions are open at once or how evenly segments split
-across workers; the reason c=12/c=16 show rejections here and not in the
-prior pass is that this pass is the first to test concurrency levels above
-the 8-session ceiling, not the larger corpus by itself. This pass uses 100
-segments per level (vs. 20), which does make the c=2..8 latency numbers more
-stable, and c=8 is now measured error-free at p95 1722.8 ms.
+Two separate limits. On latency (p95 ≤ 1.5 s), the largest level that clears
+the bar is **c=6 for SenseVoice** — c=8 measured 1265.2–3058.4 ms over four
+passes and c=12 measured 1565.5 ms, while c=6 measured 1172.6 ms. Whisper
+clears the latency bar at every level tested, c=8 included (1021.5–1085.6 ms).
+On completion, SenseVoice finishes 100/100 segments at every level up to c=12,
+the highest tested, while **Whisper's highest clean level is c=4**: at c=8 it
+rejects 22–30 of 100 against its 8-session admission ceiling. Recommended
+production concurrency: **6** for SenseVoice (the latency bar), **4** for
+Whisper (the rejection boundary).
 
 ## Setup
 
 | | |
 |---|---|
-| Device | `harvest-pi` fleet entry, reComputer R2000 series (Raspberry Pi 5 Model B, 8 GB RAM, Hailo-8 on `/dev/hailo0`, unused for this backend) |
-| Image | `asrbench-rpi5-sensevoice:local`, rebuilt on-device from this repo's `deploy/docker/Dockerfile.rpi --target final-slim` (the image from the prior pass had been pruned for disk space; disk was 2.6 GB free before the rebuild, same as the prior report) |
-| Backend | `cpu.sherpa_asr` (sherpa-onnx `OfflineRecognizer.from_sense_voice`, `model.int8.onnx`, CPU provider), profile `rpi5-sensevoice` |
-| Streaming fix | `voxedge` bind-mounted from `/home/harvest/asrbench-pi/voxedge-src` over the image's installed wheel — routes the offline-only backend's `/asr/stream` through `OfflineAccumulateStream` (accumulate to `finalize()`), the same fix used in `results/harvest-pi.md` |
-| Admission | `OVS_MAX_CONCURRENT_SESSIONS=32` requested; clamped to **8** (`session_limiter: OVS_MAX_CONCURRENT_SESSIONS=32 exceeds backend ceiling (asr=8,tts=inf) → clamping to 8`). This 8 is the `rpi5-sensevoice` profile's `asr_max_slots: 8` (`configs/profiles/rpi5-sensevoice.json:14`), which feeds `cpu.sherpa_asr`'s `concurrency_capability` via `SHERPA_ASR_MAX_CONCURRENT` (`server/core/voxedge_backend_config.py:299-318`, default 4, profile-overridable) — a configured value, not a value this codebase hardcodes; raising it would need a different profile or an env override, both out of scope for this bench-only pass |
-| Corpus | `bench/asr_bench/corpus` public AISHELL-1 zh subset rebuilt to 100 items (`download_public_corpus.py --limit 100`), vs. 20 in the prior pass |
+| Device | `harvest-pi` fleet entry, reComputer R2000 series (Raspberry Pi 5 Model B, 8 GB RAM, Hailo-8 on `/dev/hailo0`) |
+| Board state | The ten containers running before this pass (`missionpack-industrial-gateway`, `xiaozhi-server`, `xiaozhi-esp32-server-web`, `xiaozhi-esp32-server-redis`, `xiaozhi-esp32-server-db`, `mcp-endpoint-server`, `recamera-mqtt`, `recamera-ha`, `mcp_warehouse`, `mcp_face_rec`) were **stopped** before the first bench and restarted after the last. Idle `top` before the runs: 95.3% id, 1637 MB used, 457 MB swap. `mcp_face_rec` holds `/dev/hailo0`, so stopping it is also what frees the NPU for the Whisper pass |
+| Images | Both built on-device from this repo's `deploy/docker/Dockerfile.rpi`: `--target final-slim` → `asrbench-rpi5-sensevoice:r2000clean` (`sha256:968aa4f9fa90…`, 593 MB), `--target final-hailo` → `asrbench-rpi5-hailo-whisper:r2000` (`sha256:2c5069e42558…`, 657 MB). The `final-hailo` stage as committed drops an `LD_LIBRARY_PATH=/usr/lib` that this image carried; `import hailo_platform` was re-checked on a rebuild without it (`sha256:f6d9bf16557a…`) |
+| voxedge | `voxedge-0.0.13a0-py3-none-any.whl`, built from voxedge `origin/main` at `15de2bb` (`uv build --wheel`), sha256 `8f1c2cf8995d4826749f3cacaea883faa1d75fa9149fe77fdae4b9ca2f3cc849`. Installed into each container over the image's pinned wheel (`pip3 install --no-deps --force-reinstall`); `pip3 show voxedge` in-container reports 0.0.13a0 |
+| Server code | `server/` and `configs/` bind-mounted from OpenVoiceStream `origin/main` at `4d66f475` |
 | Client | `bench/asr_bench/bench.py` from the Mac over Tailscale (`ws://100.116.230.60:8621`), `--api-key ""`, chunks fed at 1.0x real time |
-| Board state | Production containers already running on this device (`xiaozhi-server`, `home-assistant`, `mysql`, `mcp_face_rec`, etc.) were left untouched throughout — none were stopped or restarted; only the test container `asrbench-pi-ceil` was created and removed |
 
-Startup log confirms the fix and the effective ceiling:
+### SenseVoice
+
+| | |
+|---|---|
+| Backend | `cpu.sherpa_asr` (sherpa-onnx `OfflineRecognizer.from_sense_voice`, `model.int8.onnx`, CPU provider), profile `rpi5-sensevoice` |
+| Admission | Raised from the profile's `asr_max_slots: 8` to 16 for this pass (`SHERPA_ASR_MAX_CONCURRENT=16`, `OVS_MAX_CONCURRENT_SESSIONS=16`), so c=12 is measured on latency rather than clipped by the ceiling — the prior pass rejected 84/100 segments at c=12 for that reason |
+| Corpus | 100 zh AISHELL-1 items (`corpus/download_public_corpus.py`, speaker S0002 train-range mirror), 500.8 s of audio |
+
+Startup log:
 
 ```
-session_limiter: OVS_MAX_CONCURRENT_SESSIONS=32 exceeds backend ceiling (asr=8,tts=inf) → clamping to 8
-SessionLimiter initialized: effective_limit=8 (env OVS_MAX_CONCURRENT_SESSIONS='32', profile.max_concurrent_sessions=8)
-ASR inference gate: concurrency=8 max_waiting=0
-ASR locking granularity: connection (asr sessions=8, in-flight=8, queue depth=0, mode=concurrent)
+SessionLimiter initialized: effective_limit=16 (env OVS_MAX_CONCURRENT_SESSIONS='16', profile.max_concurrent_sessions=8)
+ASR inference gate: concurrency=16 max_waiting=0
+ASR locking granularity: connection (asr sessions=16, in-flight=16, queue depth=0, mode=concurrent)
 Model OK: sensevoice (SenseVoice offline ASR (5 languages))
+Creating ASR backend cpu.sherpa_asr (voxedge.backends.sherpa.asr.SherpaASRBackend)
 ASR backend: sherpa_asr (capabilities: ['offline'])
+ASR executor: max_workers=16 (source=asr_cap.max_concurrent)
+```
+
+### Whisper on Hailo-8
+
+| | |
+|---|---|
+| Backend | `hailo.whisper` (`voxedge.backends.whisper.WhisperASR`), profile `rpi5-hailo-whisper`: Whisper **base** encoder as `base-whisper-encoder-5s.hef` on the NPU, decoder as an ONNX KV-cache graph on the CPU. 5 s compiled window with a 1 s boundary guard → 4 s usable |
+| HailoRT | Host `hailortcli fw-control identify` → firmware 4.21.0; host `dpkg -l` → `hailort` / `hailort-pcie-driver` 4.21.0. Container carries `hailort-4.21.0-cp311-cp311-linux_aarch64.whl` (md5 `2fde57f853ea66d670a60e68b4ca15da`) and bind-mounts the host's `/usr/lib/libhailort.so.4.21.0` — same version on both sides |
+| Artifacts | Downloaded at first start from `harvestsu/whisper-edge` via `HF_ENDPOINT=https://hf-mirror.com`: the 46,075,038-byte HEF, the base decoder pair, `vocab_en.txt`, `vocab_zh.txt`, `mel_80_filters.txt` |
+| Admission | `OVS_MAX_CONCURRENT_SESSIONS=8` and `WHISPER_MAX_CONCURRENT=8` against a profile that ships `max_concurrent_sessions: 1`. Admission is 8; **execution stays serialized** — the backend keeps one encoder handle and one KV cache behind a lock, so the extra slots buy queueing, not parallelism |
+| Corpus | 100 LibriSpeech test-clean items filtered to **duration ≤ 4.0 s** (the usable window), 296.4 s of audio, so no segment is split by the window |
+
+Startup log:
+
+```
+Applied profile rpi5-hailo-whisper from /opt/speech/configs/profiles/rpi5-hailo-whisper.json (6 env keys; 0 stale cleared)
+SessionLimiter initialized: effective_limit=8 (env OVS_MAX_CONCURRENT_SESSIONS='8', profile.max_concurrent_sessions=1)
+ASR inference gate: concurrency=1 max_waiting=7
+ASR locking granularity: sentence (asr sessions=8, in-flight=1, queue depth=7, mode=serialized)
+Whisper asset ready: encoder/hailo/base-whisper-encoder-5s.hef (46075038 bytes)
+Creating ASR backend hailo.whisper (voxedge.backends.whisper.WhisperASR)
+whisper: hailo encoder @5.0s window, CPU KV decoder, lang=en
+ASR backend: whisper-hailo (capabilities: ['streaming', 'offline'])
 ASR executor: max_workers=8 (source=asr_cap.max_concurrent)
 ```
 
-## Results (100 zh segments per concurrency level)
+## SenseVoice — 100 zh segments per level, idle board
 
-| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | CER | CPU peak | RAM/swap |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2 | 100 | 100 | 0 | 595.8 | 1028.0 | 0.123 | 0.151 | 0.33 | 5.12% | — | — |
-| 4 | 100 | 100 | 0 | 602.1 | 1016.8 | 0.125 | 0.158 | 0.65 | 5.12% | — | — |
-| 6 | 100 | 100 | 0 | 626.1 | 1249.5 | 0.132 | 0.192 | 0.95 | 5.12% | — | — |
-| 8 | 100 | 100 | 0 | 691.8 | 1722.8 | 0.136 | 0.250 | 1.24 | 5.12% | — | — |
-| 12 | 100 | 16 | 84 | 707.6 | 1048.2 | 0.130 | 0.173 | 0.97 | 6.21% (n=16) | — | — |
-| 16 | 100 | 9 | 91 | 533.7 | 796.3 | 0.130 | 0.136 | 0.89 | 9.55% (n=9) | — | — |
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | CER (per-segment mean) | CER (corpus aggregate) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | 100 | 100 | 0 | 689.9 | 1220.3 | 0.132 | 0.235 | 0.32 | 5.12% | 4.82% |
+| 4 | 100 | 100 | 0 | 639.0 | 1240.6 | 0.126 | 0.235 | 0.65 | 5.12% | 4.82% |
+| 6 | 100 | 100 | 0 | 624.9 | 1172.6 | 0.131 | 0.170 | 0.95 | 5.12% | 4.82% |
+| 8 | 100 | 100 | 0 | 723.0 | 3058.4 | 0.142 | 0.495 | 1.19 | 5.12% | 4.82% |
+| 12 | 100 | 100 | 0 | 791.4 | 1565.5 | 0.157 | 0.257 | 1.78 | 5.12% | 4.82% |
 
-Peak CPU sampled with `top -b -d 1` (600 one-second samples spanning the full
-sweep, `top-ceiling.log`): the server process peaked at **379.2%** of the
-board's 400%, at the higher-concurrency levels. `free -m` before/after the
-sweep: 3809 → 3824 MB used, swap 941 → 940 MB (both pre-existing from the
-other containers on this board, not moved by this test) — no swap growth
-attributable to this run.
+Peak CPU during the sweep, `top -b -d 1`: the server process reached **393.1%**
+of the board's 400%. Peak system memory used **2385 MB** (1637 MB idle); swap
+unchanged at 457 MB.
 
-The 84/91 errors at c=12/c=16 are `too_many_sessions` rejections at connect
-time (the 8-session admission ceiling), not decode failures or timeouts — the
-same failure mode as cat-remote's original SenseVoice "before" pass. CER at
-c=12/c=16 is computed over the 16 and 9 admitted segments respectively and is
-not comparable to the c=2..8 rows (much smaller, non-random sample: whichever
-segments happened to win a connection slot first).
+The c=8 p95 of 3058.4 ms is above both its neighbours, so c=8 was re-run three
+more times on the same corpus and container:
+
+| Repeat | OK | Errors | p50 (ms) | p95 (ms) | Throughput (seg/s) |
+|---|---|---|---|---|---|
+| 1 | 100 | 0 | 630.2 | 1458.9 | 1.25 |
+| 2 | 100 | 0 | 699.6 | 1555.9 | 1.25 |
+| 3 | 100 | 0 | 659.9 | 1265.2 | 1.24 |
+
+Across the four c=8 passes p95 is 1265.2 / 1458.9 / 1555.9 / 3058.4 ms — c=8
+sits on the 1.5 s line rather than under it, and one pass in four ran twice
+that. c=6 (1172.6 ms) and c=12 (1565.5 ms) each measured once.
+
+Two differences from the previous 100-segment pass in this repo's history:
+the board is idle here (that pass ran alongside all ten production containers),
+and admission was raised to 16, so c=12 completes 100/100 instead of rejecting
+84. Throughput now keeps climbing to 1.78 seg/s at c=12 instead of falling
+back once rejections start.
+
+CER is identical at every level, per-segment mean 5.12% and corpus-aggregate
+4.82% — concurrency changes when an utterance is decoded, not what comes out.
+
+## Whisper on Hailo-8 — 100 en segments (≤ 4 s) per level, idle board
+
+| Concurrency | Segments | OK | Err | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | WER (per-segment mean) | WER (corpus aggregate) | Hailo util | RAM |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 100 | 100 | 0 | 310.6 | 1428.1 | 0.108 | 0.530 | 0.25 | 24.43% | 23.00% | 4.0% @ 1.0 FPS | — |
+| 2 | 100 | 100 | 0 | 302.1 | 986.6 | 0.102 | 0.438 | 0.50 | 23.40% | 21.86% | 15.0% @ 4.0 FPS | — |
+| 4 | 100 | 100 | 0 | 303.4 | 1093.2 | 0.105 | 0.359 | 1.04 | 24.21% | 22.62% | 16.2% @ 4.0 FPS | — |
+| 8 | 100 | 70 | 30 | 506.5 | 1085.6 | 0.175 | 0.397 | 1.83 | 21.61% (n=70) | 20.77% (n=70) | 25.0% @ 6.0 FPS | — |
+| 8 (repeat) | 100 | 78 | 22 | 492.6 | 1021.5 | 0.165 | 0.370 | 1.92 | 20.95% (n=78) | 20.22% (n=78) | — | — |
+
+Peak CPU during the sweep: the server process reached **381%** of 400%. Peak
+system memory used **2159 MB**, against 1637 MB at idle before the container
+started; both are whole-system readings and were not broken out per process,
+so the 522 MB difference is not attributable to the container alone. Swap
+unchanged at 457 MB. The RAM column is per-level blank because `top` was
+sampled across the whole sweep, not per concurrency level.
+
+Hailo utilization is the `base-whisper-encoder-5s` row of `hailortcli monitor`
+(`HAILO_MONITOR=1` in the container, `/tmp/hmon_files` shared with the host),
+sampled for 30 s inside each level; the device-wide row matched the model row
+at c=8 (25.0%), so nothing else was using the NPU. The highest of these samples is a
+quarter of the NPU, taken at the level where the server is already rejecting
+connections. Sampling was 30 s per level, not continuous, so these are the
+values observed in those windows rather than bounds on the whole sweep.
+
+All 30 (and 22 on the repeat) c=8 failures are the same message at connect
+time:
+
+```
+received 4429 (private use) {"error": "too_many_sessions", "current": 8, "limit": 8}
+```
+
+The limiter reports 8 of 8 slots in use, so these are admission rejections and
+not decode failures. Both c=8 passes hit them, at 30 and 22 of 100; whether the
+cause is a worker's reconnect racing the previous session's slot release was
+not instrumented.
+
+61 of the 100 c=1 segments produced at least one `is_final` before end-of-audio
+(`pre_eos_finals` 1–4), i.e. the server-side endpointer cut them mid-feed and
+the client scored the joined text. For those rows `rtf` is not a decode-only
+figure. Whisper's WER also moves by roughly a point between concurrency levels
+here, while SenseVoice's CER is identical at every level. This pass did not
+isolate what varies, so the two observations are reported side by side without
+a link between them.
+
+WER is word-level on lowercased, unpunctuated text (`bench.py:84-118`). The
+per-segment mean runs about a point above the corpus aggregate: it weights
+every utterance equally, and one wrong word is a large fraction of a 3-second
+clip.
 
 ## Reading
 
-- p95 crosses 1.5 s between c=6 (1249.5 ms) and c=8 (1722.8 ms) — the ceiling
-  by the p95 ≤ 1.5 s rule sits at **c=6**.
-- Throughput rises through the admission ceiling (0.33 → 1.24 seg/s, c=2 to
-  c=8) then falls once requests start being rejected (0.97 at c=12, 0.89 at
-  c=16) — rejected connections do no work, so aggregate throughput drops even
-  though the 8 admitted slots keep decoding.
-- CER is flat at 5.12% from c=2 through c=8 (n=100 each) in this pass —
-  concurrency changes when an utterance is decoded, not what comes out,
-  consistent with the cat-remote finding. It differs from the single-session
-  baseline in `results/harvest-pi.md` (5.48%), which used a smaller,
-  different draw from the corpus (20 items vs. this pass's 100) — the two
-  numbers are not measuring the same sample and should not be read as a
-  match or a mismatch caused by concurrency.
-- The two limits found here are independent, not one causing the other: the
-  8-session admission ceiling (a profile setting, `asr_max_slots: 8`) and the
-  1.5 s latency bar (crossed between c=6 and c=8) both land at/near c=8 in
-  this test, but for different reasons — the admission ceiling is a
-  configuration choice, while the latency crossing is a measured CPU
-  contention effect. Recommending c=6 uses the latency bar, which is the
-  tighter of the two on this hardware; raising `asr_max_slots` past 8 would
-  not help, since c=8 already exceeds the 1.5 s target on latency grounds
-  alone.
+- Both paths are CPU-heavy: SenseVoice peaked at 393.1% of 400% and Whisper at
+  381%, since Whisper's decoder also runs on the CPU and only its encoder is on
+  the NPU. On latency they land close: p50 is 625–791 ms for SenseVoice across
+  its sweep and 302–507 ms for Whisper. Whisper's lower p50 comes with a 5 s
+  window that only fits short utterances, and with rejections starting at c=8
+  while SenseVoice was still completing 100/100 there.
+- Throughput at the recommended level: SenseVoice 0.95 seg/s at c=6, Whisper
+  1.04 seg/s at c=4. Whisper's segments are shorter (2.96 s mean vs. 5.01 s),
+  so in audio-seconds per wall-second SenseVoice does 4.78 and Whisper 3.09.
+- Accuracy is not comparable across the two sections — different languages,
+  different corpora, character-level vs. word-level scoring. SenseVoice: 4.82%
+  corpus-aggregate CER on zh AISHELL-1. Whisper base on Hailo: 23.00%
+  corpus-aggregate WER on LibriSpeech test-clean clips ≤ 4 s at c=1. Compare
+  aggregate with aggregate and mean with mean; the two columns are different
+  statistics over the same transcripts.
+- The Hailo-8 sampled at 25% utilization at the highest level tested, and at
+  4–16% below that. What would happen at c=5/6/7, or with the admission
+  ceiling raised above 8, was not measured — those levels were not run.
