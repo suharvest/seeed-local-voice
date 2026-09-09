@@ -1,0 +1,15 @@
+{
+  "name": "orin-whisper-c64",
+  "description": "Copy of orin-whisper requesting an admission ceiling of 64, for the orin-nano (J3011) / orin-nx (J4012) Whisper concurrency-ceiling sweep (bench/asr_bench/DISPATCH.md). This is a REQUESTED benchmark ceiling only: with voxedge==0.0.13a0, WhisperASRConfig has no max_concurrent field, so the backend clamps the effective admission ceiling to 1 regardless of this value (confirmed in results/concurrency-{orin-nano,orin-nx}-ceiling.md). Same backend/build as orin-whisper (base, bf16 TensorRT encoder, ONNX decoder with KV cache).",
+  "asr_backend": "jetson.whisper_trt",
+  "execution_policy": {
+    "mode": "concurrent"
+  },
+  "env": {
+    "WHISPER_LANGUAGE": "en",
+    "WHISPER_VARIANT": "base",
+    "WHISPER_WINDOW_S": "30"
+  },
+  "max_concurrent_sessions": 64,
+  "asr_max_slots": 64
+}
