@@ -5,13 +5,19 @@ beforehand were stopped for the whole sweep and restarted afterwards.
 
 Two separate limits. On latency (p95 ≤ 1.5 s), the largest level that clears
 the bar is **c=6 for SenseVoice** — c=8 measured 1265.2–3058.4 ms over four
-passes and c=12 measured 1565.5 ms, while c=6 measured 1172.6 ms. Whisper
-clears the latency bar at every level tested, c=8 included (1021.5–1085.6 ms).
-On completion, SenseVoice finishes 100/100 segments at every level up to c=12,
-the highest tested, while **Whisper's highest clean level is c=4**: at c=8 it
-rejects 22–30 of 100 against its 8-session admission ceiling. Recommended
-production concurrency: **6** for SenseVoice (the latency bar), **4** for
-Whisper (the rejection boundary).
+passes and c=12 measured 1565.5 ms, while c=6 measured 1172.6 ms.
+
+Whisper's per-level WER drift in the original table was a bench-client
+artifact (the client raced the server's own VAD against its EOS frame — see
+"History (superseded below)" in the Whisper section) and does not reproduce
+after `bench.py` was fixed to pin `?vad=none`. The original c=8
+`too_many_sessions` rejections were a genuine admission-ceiling hit, not a
+client artifact, and this rerun raises the ceiling to 16 rather than
+explaining them. Rerun with the fixed client and admission raised to 16:
+zero errors and zero rejections through c=16, WER byte-identical (8.39%) at
+every level, 0/100 transcripts differing from c=1 at any level. Recommended
+production concurrency: **6** for SenseVoice (the latency bar), **16** for
+Whisper (highest level tested, p95 1465.3 ms, still under the 1.5 s bar).
 
 ## Setup
 
@@ -154,23 +160,94 @@ per-segment mean runs about a point above the corpus aggregate: it weights
 every utterance equally, and one wrong word is a large fraction of a 3-second
 clip.
 
+**History (superseded below):** the table above and its per-level WER drift
+were collected with a bench client that opened `/asr/stream` with the server
+VAD left on while also sending the EOS frame; under load the client's own
+EOS raced the server's endpoint detector, and the client scored whichever
+`is_final` arrived first as the whole segment. `bench.py` now pins
+`?vad=none` and accumulates every final. The c=8 `too_many_sessions`
+rejections (`current: 8, limit: 8` above) were a real admission-ceiling hit
+against the `OVS_MAX_CONCURRENT_SESSIONS=8` limiter, which was already in
+effect at the time — not caused by the missing `max_concurrent` field on
+`WhisperASRConfig` (that field gates the backend's own decode parallelism,
+not session admission) — and were not re-investigated in this rerun; the
+reconnect-race explanation above (a worker's reconnect racing the previous
+session's slot release) remains uninstrumented. This rerun raises the
+admission ceiling to 16 for headroom, which happens to avoid the c=8
+boundary the old table sat on, but does not establish what caused those
+specific rejections.
+
+### Rerun with the fixed client and a real admission ceiling
+
+Image/profile/artifacts unchanged (`asrbench-rpi5-hailo-whisper:r2000b`,
+profile `rpi5-hailo-whisper`, HEF + decoder cached on-device). voxedge
+`0.0.12a0` replaced with a wheel built from `voxedge` `main` 466f3e4 (the
+same commit as the J3011/J4012/RK3576/RK3588 reruns), `pip3 install --no-deps
+--force-reinstall` then `docker restart`; server confirmed at startup
+`ASR executor: max_workers=16 (source=asr_cap.max_concurrent)`. Unlike the
+Jetson/RK boards, R2000's admission was already 8 in the original pass
+(`effective_limit=8` at line 67 above) — `OVS_MAX_CONCURRENT_SESSIONS` was
+not clamped there. This run only raises `OVS_MAX_CONCURRENT_SESSIONS` from 8
+to 16 for headroom past the level where the old table hit rejections; it
+does not establish what caused those specific c=8 rejections (see the
+History note above). `OVS_API_KEYS=testkey123`, bench run with `--api-key`.
+`mcp_face_rec` stopped for the run (holds `/dev/hailo0`) and restarted after.
+
+Corpus: the same 100-item en <=4.0 s subset as the table above (verified
+byte-identical ref/duration match against a fresh draw from the same
+HF-mirror parquet), the same 100 items reused at every concurrency level.
+
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | WER (aggregate) |
+|---|---|---|---|---|---|---|---|---|---|
+| 1  | 100 | 100 | 0 | 305.3 | 491.6  | 0.106 | 0.186 | 0.28 | 8.39% |
+| 2  | 100 | 100 | 0 | 314.1 | 520.8  | 0.109 | 0.198 | 0.55 | 8.39% |
+| 4  | 100 | 100 | 0 | 330.6 | 690.8  | 0.115 | 0.282 | 1.07 | 8.39% |
+| 8  | 100 | 100 | 0 | 340.1 | 870.4  | 0.118 | 0.362 | 2.06 | 8.39% |
+| 12 | 100 | 100 | 0 | 472.6 | 1300.0 | 0.168 | 0.431 | 2.62 | 8.39% |
+| 16 | 100 | 100 | 0 | 751.7 | 1465.3 | 0.261 | 0.547 | 3.60 | 8.39% |
+
+Zero errors and zero admission rejections through c=16 — the `too_many_sessions`
+failures in the withdrawn table above do not reproduce; the real
+`max_concurrent` field removes the clamp that made `WHISPER_MAX_CONCURRENT`
+a no-op. WER is byte-identical (8.39% aggregate) at every level, and every
+segment's transcript is identical to its c=1 text at every other level (0/100
+differ at c=2, c=4, c=8, c=12, c=16). `pre_eos_finals` is 0 for every segment
+at every level (the withdrawn table's 61/100 mid-feed cuts at c=1 do not
+reproduce with `?vad=none` pinned). **Recommended admission ceiling: 16** —
+the highest level tested, with p95 (1465.3 ms) still under the 1.5 s bar;
+c=16 was the top of this pass's requested range and was not shown to be this
+board's hardware ceiling, only the highest level that stayed clean.
+
 ## Reading
+
+**Note:** the three bullets below on Whisper throughput/rejections/accuracy
+describe the withdrawn pre-fix table (c=4 recommended, 23.00% WER, rejections
+starting at c=8). See "Rerun with the fixed client and a real admission
+ceiling" above for the current numbers (c=16 recommended, 8.39% WER, zero
+rejections through c=16) — kept here only as the historical record for the
+CPU/latency/Hailo-utilization comparisons, which were not rerun (utilization
+sampling and CPU-percent sampling were not repeated for the fixed-client
+pass).
 
 - Both paths are CPU-heavy: SenseVoice peaked at 393.1% of 400% and Whisper at
   381%, since Whisper's decoder also runs on the CPU and only its encoder is on
   the NPU. On latency they land close: p50 is 625–791 ms for SenseVoice across
   its sweep and 302–507 ms for Whisper. Whisper's lower p50 comes with a 5 s
   window that only fits short utterances, and with rejections starting at c=8
-  while SenseVoice was still completing 100/100 there.
-- Throughput at the recommended level: SenseVoice 0.95 seg/s at c=6, Whisper
-  1.04 seg/s at c=4. Whisper's segments are shorter (2.96 s mean vs. 5.01 s),
-  so in audio-seconds per wall-second SenseVoice does 4.78 and Whisper 3.09.
+  while SenseVoice was still completing 100/100 there (in the withdrawn table;
+  see the note above).
+- Throughput at the withdrawn table's recommended level: SenseVoice 0.95 seg/s
+  at c=6, Whisper 1.04 seg/s at c=4. Whisper's segments are shorter (2.96 s
+  mean vs. 5.01 s), so in audio-seconds per wall-second SenseVoice does 4.78
+  and Whisper 3.09.
 - Accuracy is not comparable across the two sections — different languages,
   different corpora, character-level vs. word-level scoring. SenseVoice: 4.82%
-  corpus-aggregate CER on zh AISHELL-1. Whisper base on Hailo: 23.00%
-  corpus-aggregate WER on LibriSpeech test-clean clips ≤ 4 s at c=1. Compare
+  corpus-aggregate CER on zh AISHELL-1. Whisper base on Hailo, withdrawn table:
+  23.00% corpus-aggregate WER on LibriSpeech test-clean clips ≤ 4 s at c=1
+  (revised to 8.39% in the fixed-client rerun above, same corpus). Compare
   aggregate with aggregate and mean with mean; the two columns are different
   statistics over the same transcripts.
-- The Hailo-8 sampled at 25% utilization at the highest level tested, and at
-  4–16% below that. What would happen at c=5/6/7, or with the admission
-  ceiling raised above 8, was not measured — those levels were not run.
+- The Hailo-8 sampled at 25% utilization at the highest level tested in the
+  withdrawn table (c=8), and at 4–16% below that; this was not resampled for
+  the fixed-client rerun's higher levels (c=12/16), so utilization at those
+  levels is unmeasured.

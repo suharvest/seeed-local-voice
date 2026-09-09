@@ -119,9 +119,12 @@ On this board admission is no longer the limit; queueing latency is. p95
 crosses 1.5 s already at c=2 (2964.8 ms) and keeps growing to 5530.8 ms at
 c=8 — inference is still one-at-a-time, so raising the admission ceiling
 converts what used to be an instant rejection into a longer wait, not more
-throughput. **Recommended concurrency: 1** — it is the only level with p95
-under 1.5 s (968.2 ms); every level above it trades latency for admission
-headroom without adding decode throughput.
+throughput. **Recommended concurrency: 1** on this table — it is the only
+level with p95 under 1.5 s (968.2 ms); every level above it trades latency
+for admission headroom without adding decode throughput. This table was
+collected before `bench.py` pinned `?vad=none`; the "Rerun with the fixed
+client" subsection below reruns this sweep and revises the recommendation to
+**4**.
 
 ### Setup
 
@@ -170,7 +173,55 @@ Core2 flat at 0% throughout. As on RK3576, the RKNN encoder is a small, fast
 part of the pipeline; the CPU ONNX KV-cache decoder (invisible to this NPU
 counter) is what the added admission concurrency queues in front of.
 
+### Rerun with the fixed client, fixed 72-item subset at every level
+
+**History:** the table above already used a fixed 76-item subset across all
+levels, but was collected before `bench.py` pinned `?vad=none` (the same
+double-endpoint-detector defect fixed elsewhere in this PR — see
+`concurrency-orin-nano-ceiling.md`'s Whisper section for the mechanism).
+This rerun uses the same fixed 72-item <=9.5s en subset as the J3011/J4012/
+RK3576 reruns (a slightly different draw than the prior 76-item set, since
+that regeneration produced a different corpus split) plus the fixed client.
+
+Deployment unchanged (image `sensecraft-missionpack.seeed.cn/solution/seeed-local-voice:rk-20260903.10`,
+profile `rk3588-whisper-10s` with `OVS_MAX_CONCURRENT_SESSIONS=8`/
+`WHISPER_MAX_CONCURRENT=8`, `server/`+`configs/` bind-mounted from this
+worktree's `main` at 438e0a4b, voxedge wheel from `main` 466f3e4,
+`--api-key ""`). Server confirmed `ASR executor: max_workers=8
+(source=asr_cap.max_concurrent)`.
+
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | Throughput (seg/s) | WER (aggregate) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 72 | 72 | 0 | 665.7 | 983.1  | 0.151 | 0.17 | 5.88% |
+| 2 | 72 | 72 | 0 | 657.2 | 1045.4 | 0.148 | 0.34 | 5.88% |
+| 4 | 72 | 72 | 0 | 654.8 | 1380.4 | 0.163 | 0.68 | 5.88% |
+| 8 | 72 | 72 | 0 | 886.0 | 2083.4 | 0.210 | 1.25 | 5.88% |
+
+Zero errors at every level. WER is byte-identical (5.88% aggregate; 6.16%
+per-segment mean) at every
+level, and 0/72 transcripts differ from c=1 at c=2, c=4, or c=8;
+`pre_eos_finals` is 0 for every segment at every level. p95 is monotonic
+here and clears the 1.5 s bar through c=4 (1380.4 ms), crossing it at c=8
+(2083.4 ms). **Recommended admission ceiling: 4** — the highest level
+tested whose p95 stays under 1.5 s. This is materially better than the
+withdrawn table's per-level p95 (2964.8-5530.8 ms above c=1), consistent with
+that table having been affected by the same client defect fixed here.
+
+For the cross-device matched-100 comparison (same 100-item <=4.0 s en subset
+used for R2000's Hailo-8 pass and `whisper-hailo-wer-isolation.md`), a
+separate c=1 run against that subset: `results/rk3588-whisper-matched100-fixed.json`,
+100/100 ok, 0 errors, aggregate WER **7.50%**, p50 570.2 ms, p95 790.1 ms,
+`pre_eos_finals` 0/100 — this row is also folded into `accuracy-unified-corpus.md`.
+
 ### Reading
+
+**Note:** this section describes the withdrawn 76-item table above (p95
+968.2->5530.8 ms, throughput 0.17->0.98 seg/s, "Recommended concurrency: 1").
+The "Rerun with the fixed client, fixed 72-item subset at every level"
+subsection revises this to p95 983.1->2083.4 ms, throughput 0.17->1.25
+seg/s, and **Recommended admission ceiling: 4** — kept below as the
+historical record for the pre-fix-client measurement, not the current
+reading.
 
 - The fix (`voxedge` PR #12/#13, this pass's wheel) does what it was built to
   do: it turns a hard rejection at c>=2 (cat-remote's `too_many_sessions`

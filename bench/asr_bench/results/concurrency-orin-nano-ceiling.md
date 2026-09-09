@@ -6,9 +6,14 @@ previously 1 (the installed `voxedge==0.0.13a0` package had no
 `max_concurrent` field on `WhisperASRConfig`); with a wheel built from
 `voxedge` `main` (466f3e4, unreleased) the ceiling now follows the profile.
 The shorter-transcript effect this file previously attributed to the backend
-above c=8 was a defect in the bench client, traced to the frame level on
-J4012 and fixed in `bench/asr_bench/bench.py`; the J3011 Whisper numbers
-below were collected with the pre-fix client. See the Whisper section.
+above c=8 was a defect in the bench client (`bench/asr_bench/bench.py`
+opened `/asr/stream` with the server VAD on while also sending EOS, so under
+load the client's own EOS raced the server's endpoint detector and the
+client scored a mid-utterance fragment as the whole segment), fixed by
+pinning `?vad=none`. J3011 has been rerun with the fixed client: 0/72 items
+differ from c=1 at every concurrency level tested, and WER is byte-identical
+(5.24%) at every level — see the Whisper section's "Rerun with the fixed
+client" table for the current numbers and recommended ceiling (8).
 
 ## SenseVoice (zh)
 
@@ -133,17 +138,54 @@ section) using the same client, the same profile and the same corpus: of the
 24 items captured at both c=1 and c=24 there, the 4 that differed were each a
 strict prefix of the c=1 text, and for all 4 the join of every captured final
 matches between the two levels. With the fixed client, J4012 transcribes 0 of
-72 items differently at c=8, c=16 or c=24 than at c=1. J3011 has not been
-rerun, so the attribution here rests on that J4012 trace plus the fact that
-both boards ran the same client code.
+72 items differently at c=8, c=16 or c=24 than at c=1. J3011 has since been
+rerun with the fixed client too (see "Rerun with the fixed client" below):
+0/72 items differ from c=1 at c=8, c=16, c=24, or c=32, confirming the same
+result on this board directly rather than only by inference from J4012.
 
 The J3011 table above was produced by the pre-fix client, so both its WER
 column and its latency column carry that behaviour: for a split utterance the
 client stopped reading at the first final, which is a different message than
 the segment's own. The accuracy-regression conclusion and the ceiling
-recommendation that rested on it are withdrawn. The `bench.py` change in this
-same commit pins `?vad=none` and accumulates every final; rerunning this
-board's sweep with it is what produces a J3011 Whisper ceiling.
+recommendation that rested on it are withdrawn — kept above only as the
+pre-fix-client historical record.
+
+### Rerun with the fixed client (`?vad=none`, all finals collected)
+
+Same deployment recipe as above (image `v0.9.0-ondemand-20260721c`,
+`server/`+`configs/` bind-mounted from this worktree's `main` at 438e0a4b,
+profile `orin-whisper-c64`, voxedge wheel built from `voxedge` `main` 466f3e4,
+`OVS_API_KEYS=testkey123`, bench run with `--api-key`). Server confirmed at
+startup: `ASR executor: max_workers=64 (source=asr_cap.max_concurrent)`. The
+Whisper base encoder `.plan` (bf16 TensorRT) was reused from the
+already-cached `speech-models` volume, not rebuilt.
+
+Corpus: a fixed 72-item LibriSpeech test-clean en subset (duration <= 9.5 s),
+the same 72 items at every concurrency level (not round-robined/regrown per
+level as in the withdrawn table above), so every level is per-item comparable
+to c=1.
+
+| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | RTF p50 | Throughput (seg/s) | WER |
+|---|---|---|---|---|---|---|---|---|
+| 1  | 72 | 72 | 0 | 434.5  | 639.4  | 0.102 | 0.18 | 5.24% |
+| 8  | 72 | 72 | 0 | 491.6  | 836.5  | 0.104 | 1.37 | 5.24% |
+| 16 | 72 | 72 | 0 | 883.6  | 1710.1 | 0.190 | 2.32 | 5.24% |
+| 24 | 72 | 72 | 0 | 2798.1 | 3576.1 | 0.531 | 2.68 | 5.24% |
+| 32 | 72 | 72 | 0 | 4817.8 | 6372.4 | 0.770 | 2.74 | 5.24% |
+
+Zero errors at every level tested. WER is byte-identical (5.24% aggregate) at
+every concurrency level, and per-segment transcripts are identical to c=1 at
+every other level (0/72 differ at c=8, c=16, c=24, c=32) — the "shorter
+transcript at higher concurrency" defect traced above does not reproduce with
+the fixed client. `pre_eos_finals` is 0 for every segment at every level (the
+old table's non-zero counts, produced by the pre-fix client racing the server
+VAD against the client's own EOS, do not appear here).
+
+p95 stays under the 1.5 s bar through c=8 (836.5 ms) and crosses it at c=16
+(1710.1 ms, +104%) — a smaller jump than the withdrawn table's c=8->c=16 step
+(1.29 s -> 3.76 s) but the same direction. **Recommended admission ceiling: 8**
+— the highest tested level whose p95 stays under 1.5 s; c=16 was tested to
+find the boundary but its p95 exceeds the bar.
 
 ## Files
 
