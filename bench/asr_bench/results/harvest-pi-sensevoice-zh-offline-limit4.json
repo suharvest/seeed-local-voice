@@ -1,0 +1,1209 @@
+{
+  "url": "http://100.116.230.60:8000",
+  "lang": "zh",
+  "endpoint": "/asr (offline, multipart)",
+  "runs": [
+    {
+      "concurrency": 1,
+      "segments": 20,
+      "ok": 20,
+      "errors": 0,
+      "wall_s": 28.22950699995272,
+      "latency_ms_p50": 736.0464159864932,
+      "latency_ms_p95": 14535.803416976705,
+      "rtf_p50": 0.12302340944047888,
+      "rtf_p95": 2.422633902829451,
+      "error_rate_mean": 0.14639254944402003,
+      "error_samples": [],
+      "results": [
+        {
+          "ok": true,
+          "latency_s": 14.535803416976705,
+          "text": "\u800c\u5bf9\u9762\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d\u3002",
+          "raw": {
+            "text": "\u800c\u5bf9\u9762\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_00",
+          "ref": "\u800c\u5bf9\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d",
+          "duration_s": 6.0,
+          "rtf": 2.422633902829451
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7312084580771625,
+          "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+          "raw": {
+            "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_01",
+          "ref": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489",
+          "duration_s": 3.87,
+          "rtf": 0.18894275402510657
+        },
+        {
+          "ok": true,
+          "latency_s": 0.6708301671314985,
+          "text": "\u81ea6\u6708\u5e95\uff0c\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e\u3002",
+          "raw": {
+            "text": "\u81ea6\u6708\u5e95\uff0c\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_02",
+          "ref": "\u81ea\u516d\u6708\u5e95\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e",
+          "duration_s": 5.41,
+          "rtf": 0.12399818246423261
+        },
+        {
+          "ok": true,
+          "latency_s": 0.38998420792631805,
+          "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+          "raw": {
+            "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_03",
+          "ref": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb",
+          "duration_s": 3.17,
+          "rtf": 0.12302340944047888
+        },
+        {
+          "ok": true,
+          "latency_s": 0.3434974579140544,
+          "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+          "raw": {
+            "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_04",
+          "ref": "\u4ec5\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc",
+          "duration_s": 2.58,
+          "rtf": 0.13313854957909085
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7401499170809984,
+          "text": "\u9664\u4e86\u5317\u4eac\u3001\u4e0a\u6d77\u3001\u5e7f\u5dde\u3001\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916\u3002",
+          "raw": {
+            "text": "\u9664\u4e86\u5317\u4eac\u3001\u4e0a\u6d77\u3001\u5e7f\u5dde\u3001\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_05",
+          "ref": "\u9664\u4e86\u5317\u4eac\u4e0a\u6d77\u5e7f\u5dde\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916",
+          "duration_s": 5.89,
+          "rtf": 0.12566212514108632
+        },
+        {
+          "ok": true,
+          "latency_s": 0.43792779208160937,
+          "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+          "raw": {
+            "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_06",
+          "ref": "\u56db\u5341\u516d\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d",
+          "duration_s": 3.39,
+          "rtf": 0.12918223955209715
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7177652090322226,
+          "text": "41\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d\u3002",
+          "raw": {
+            "text": "41\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_07",
+          "ref": "\u56db\u5341\u4e00\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d",
+          "duration_s": 6.14,
+          "rtf": 0.11689987117788643
+        },
+        {
+          "ok": true,
+          "latency_s": 0.6575191249139607,
+          "text": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u5019\u800c\u6765\u3002",
+          "raw": {
+            "text": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u5019\u800c\u6765\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_08",
+          "ref": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u540e\u800c\u6765",
+          "duration_s": 4.13,
+          "rtf": 0.159205599252775
+        },
+        {
+          "ok": true,
+          "latency_s": 0.5236554159782827,
+          "text": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b\u3002",
+          "raw": {
+            "text": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_09",
+          "ref": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b",
+          "duration_s": 4.41,
+          "rtf": 0.11874272471162872
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7657467918470502,
+          "text": "\u653e\u677e\u4e86\u4e0e\u81ea\u7f51\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u653e\u677e\u4e86\u4e0e\u81ea\u7f51\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_10",
+          "ref": "\u653e\u677e\u4e86\u4e0e\u81ea\u5f80\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56",
+          "duration_s": 6.77,
+          "rtf": 0.113108831882873
+        },
+        {
+          "ok": true,
+          "latency_s": 1.0828307499177754,
+          "text": "\u5176\u4e2d\uff0c\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead\u3002",
+          "raw": {
+            "text": "\u5176\u4e2d\uff0c\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_11",
+          "ref": "\u5176\u4e2d\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead",
+          "duration_s": 9.32,
+          "rtf": 0.11618355685813041
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8259657500311732,
+          "text": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\uff0c\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f\u3002",
+          "raw": {
+            "text": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\uff0c\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_12",
+          "ref": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f",
+          "duration_s": 7.29,
+          "rtf": 0.11330120027862459
+        },
+        {
+          "ok": true,
+          "latency_s": 0.9909207909367979,
+          "text": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_13",
+          "ref": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56",
+          "duration_s": 7.15,
+          "rtf": 0.13859032041074096
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7203171250876039,
+          "text": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a930\u65b0\u653f\u7b56\u7684\u63aa\u65bd\u3002",
+          "raw": {
+            "text": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a930\u65b0\u653f\u7b56\u7684\u63aa\u65bd\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_14",
+          "ref": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a\u4e5d\u4e09\u96f6\u65b0\u653f\u7b56\u7684\u63aa\u65bd",
+          "duration_s": 6.32,
+          "rtf": 0.11397422865310189
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8488545420113951,
+          "text": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_15",
+          "ref": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56",
+          "duration_s": 7.25,
+          "rtf": 0.11708338510502002
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7360464159864932,
+          "text": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b\u3002",
+          "raw": {
+            "text": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_16",
+          "ref": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b",
+          "duration_s": 6.45,
+          "rtf": 0.11411572340875864
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8370950419921428,
+          "text": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u624b\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f\u3002",
+          "raw": {
+            "text": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u624b\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_17",
+          "ref": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u9996\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f",
+          "duration_s": 6.83,
+          "rtf": 0.12256149955961095
+        },
+        {
+          "ok": true,
+          "latency_s": 0.9165202090516686,
+          "text": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\uff0c\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0\u3002",
+          "raw": {
+            "text": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\uff0c\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_18",
+          "ref": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0",
+          "duration_s": 7.63,
+          "rtf": 0.12012060406968135
+        },
+        {
+          "ok": true,
+          "latency_s": 0.7246586249675602,
+          "text": "\u5176\u4e2d\uff0c\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005\u3002",
+          "raw": {
+            "text": "\u5176\u4e2d\uff0c\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_19",
+          "ref": "\u5176\u4e2d\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005",
+          "duration_s": 5.15,
+          "rtf": 0.1407104126150602
+        }
+      ]
+    },
+    {
+      "concurrency": 2,
+      "segments": 20,
+      "ok": 20,
+      "errors": 0,
+      "wall_s": 8.612696125172079,
+      "latency_ms_p50": 873.6343749333173,
+      "latency_ms_p95": 1412.961499998346,
+      "rtf_p50": 0.14512432758407345,
+      "rtf_p95": 0.17703567476322252,
+      "error_rate_mean": 0.14639254944402003,
+      "error_samples": [],
+      "results": [
+        {
+          "ok": true,
+          "latency_s": 0.9694531250279397,
+          "text": "\u800c\u5bf9\u9762\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d\u3002",
+          "raw": {
+            "text": "\u800c\u5bf9\u9762\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_00",
+          "ref": "\u800c\u5bf9\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d",
+          "duration_s": 6.0,
+          "rtf": 0.16157552083798996
+        },
+        {
+          "ok": true,
+          "latency_s": 0.6376378340646625,
+          "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+          "raw": {
+            "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_01",
+          "ref": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489",
+          "duration_s": 3.87,
+          "rtf": 0.1647642982079231
+        },
+        {
+          "ok": true,
+          "latency_s": 0.6943736670073122,
+          "text": "\u81ea6\u6708\u5e95\uff0c\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e\u3002",
+          "raw": {
+            "text": "\u81ea6\u6708\u5e95\uff0c\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_02",
+          "ref": "\u81ea\u516d\u6708\u5e95\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e",
+          "duration_s": 5.41,
+          "rtf": 0.12835003087011315
+        },
+        {
+          "ok": true,
+          "latency_s": 0.4184675409924239,
+          "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+          "raw": {
+            "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_03",
+          "ref": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb",
+          "duration_s": 3.17,
+          "rtf": 0.13200868801022836
+        },
+        {
+          "ok": true,
+          "latency_s": 0.45675204088911414,
+          "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+          "raw": {
+            "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_04",
+          "ref": "\u4ec5\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc",
+          "duration_s": 2.58,
+          "rtf": 0.17703567476322252
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8329580840654671,
+          "text": "\u9664\u4e86\u5317\u4eac\u3001\u4e0a\u6d77\u3001\u5e7f\u5dde\u3001\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916\u3002",
+          "raw": {
+            "text": "\u9664\u4e86\u5317\u4eac\u3001\u4e0a\u6d77\u3001\u5e7f\u5dde\u3001\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_05",
+          "ref": "\u9664\u4e86\u5317\u4eac\u4e0a\u6d77\u5e7f\u5dde\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916",
+          "duration_s": 5.89,
+          "rtf": 0.1414190295527109
+        },
+        {
+          "ok": true,
+          "latency_s": 0.44873562501743436,
+          "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+          "raw": {
+            "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_06",
+          "ref": "\u56db\u5341\u516d\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d",
+          "duration_s": 3.39,
+          "rtf": 0.1323703908606001
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8585614589974284,
+          "text": "41\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d\u3002",
+          "raw": {
+            "text": "41\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_07",
+          "ref": "\u56db\u5341\u4e00\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d",
+          "duration_s": 6.14,
+          "rtf": 0.13983085651423915
+        },
+        {
+          "ok": true,
+          "latency_s": 0.6001470419578254,
+          "text": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u5019\u800c\u6765\u3002",
+          "raw": {
+            "text": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u5019\u800c\u6765\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_08",
+          "ref": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u540e\u800c\u6765",
+          "duration_s": 4.13,
+          "rtf": 0.14531405374281486
+        },
+        {
+          "ok": true,
+          "latency_s": 0.5677183328662068,
+          "text": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b\u3002",
+          "raw": {
+            "text": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_09",
+          "ref": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b",
+          "duration_s": 4.41,
+          "rtf": 0.12873431584267728
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8736343749333173,
+          "text": "\u653e\u677e\u4e86\u4e0e\u81ea\u7f51\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u653e\u677e\u4e86\u4e0e\u81ea\u7f51\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_10",
+          "ref": "\u653e\u677e\u4e86\u4e0e\u81ea\u5f80\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56",
+          "duration_s": 6.77,
+          "rtf": 0.12904495936976623
+        },
+        {
+          "ok": true,
+          "latency_s": 1.412961499998346,
+          "text": "\u5176\u4e2d\uff0c\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead\u3002",
+          "raw": {
+            "text": "\u5176\u4e2d\uff0c\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_11",
+          "ref": "\u5176\u4e2d\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead",
+          "duration_s": 9.32,
+          "rtf": 0.1516053111586208
+        },
+        {
+          "ok": true,
+          "latency_s": 1.0977205829694867,
+          "text": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\uff0c\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f\u3002",
+          "raw": {
+            "text": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\uff0c\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_12",
+          "ref": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f",
+          "duration_s": 7.29,
+          "rtf": 0.1505789551398473
+        },
+        {
+          "ok": true,
+          "latency_s": 1.044178833020851,
+          "text": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_13",
+          "ref": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56",
+          "duration_s": 7.15,
+          "rtf": 0.14603899762529385
+        },
+        {
+          "ok": true,
+          "latency_s": 0.9113582498393953,
+          "text": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a930\u65b0\u653f\u7b56\u7684\u63aa\u65bd\u3002",
+          "raw": {
+            "text": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a930\u65b0\u653f\u7b56\u7684\u63aa\u65bd\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_14",
+          "ref": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a\u4e5d\u4e09\u96f6\u65b0\u653f\u7b56\u7684\u63aa\u65bd",
+          "duration_s": 6.32,
+          "rtf": 0.1442022547214233
+        },
+        {
+          "ok": true,
+          "latency_s": 1.0521513749845326,
+          "text": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_15",
+          "ref": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56",
+          "duration_s": 7.25,
+          "rtf": 0.14512432758407345
+        },
+        {
+          "ok": true,
+          "latency_s": 0.9480436670128256,
+          "text": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b\u3002",
+          "raw": {
+            "text": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_16",
+          "ref": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b",
+          "duration_s": 6.45,
+          "rtf": 0.14698351426555437
+        },
+        {
+          "ok": true,
+          "latency_s": 1.0449181669391692,
+          "text": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u624b\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f\u3002",
+          "raw": {
+            "text": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u624b\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_17",
+          "ref": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u9996\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f",
+          "duration_s": 6.83,
+          "rtf": 0.15298948271437324
+        },
+        {
+          "ok": true,
+          "latency_s": 1.0989861660636961,
+          "text": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\uff0c\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0\u3002",
+          "raw": {
+            "text": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\uff0c\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_18",
+          "ref": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0",
+          "duration_s": 7.63,
+          "rtf": 0.14403488414989465
+        },
+        {
+          "ok": true,
+          "latency_s": 0.628501458093524,
+          "text": "\u5176\u4e2d\uff0c\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005\u3002",
+          "raw": {
+            "text": "\u5176\u4e2d\uff0c\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_19",
+          "ref": "\u5176\u4e2d\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005",
+          "duration_s": 5.15,
+          "rtf": 0.12203911807641242
+        }
+      ]
+    },
+    {
+      "concurrency": 4,
+      "segments": 20,
+      "ok": 20,
+      "errors": 0,
+      "wall_s": 8.085435625165701,
+      "latency_ms_p50": 1539.1939159017056,
+      "latency_ms_p95": 2940.0702498387545,
+      "rtf_p50": 0.2811943782734222,
+      "rtf_p95": 0.3154581813131711,
+      "error_rate_mean": 0.14639254944402003,
+      "error_samples": [],
+      "results": [
+        {
+          "ok": true,
+          "latency_s": 1.4595505842007697,
+          "text": "\u800c\u5bf9\u9762\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d\u3002",
+          "raw": {
+            "text": "\u800c\u5bf9\u9762\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_00",
+          "ref": "\u800c\u5bf9\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d",
+          "duration_s": 6.0,
+          "rtf": 0.2432584307001283
+        },
+        {
+          "ok": true,
+          "latency_s": 1.0330359591171145,
+          "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+          "raw": {
+            "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_01",
+          "ref": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489",
+          "duration_s": 3.87,
+          "rtf": 0.2669343563610115
+        },
+        {
+          "ok": true,
+          "latency_s": 1.5391939159017056,
+          "text": "\u81ea6\u6708\u5e95\uff0c\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e\u3002",
+          "raw": {
+            "text": "\u81ea6\u6708\u5e95\uff0c\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_02",
+          "ref": "\u81ea\u516d\u6708\u5e95\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e",
+          "duration_s": 5.41,
+          "rtf": 0.28450904175632263
+        },
+        {
+          "ok": true,
+          "latency_s": 0.935568458866328,
+          "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+          "raw": {
+            "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_03",
+          "ref": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb",
+          "duration_s": 3.17,
+          "rtf": 0.29513200595152306
+        },
+        {
+          "ok": true,
+          "latency_s": 0.6948789590969682,
+          "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+          "raw": {
+            "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_04",
+          "ref": "\u4ec5\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc",
+          "duration_s": 2.58,
+          "rtf": 0.2693329298825458
+        },
+        {
+          "ok": true,
+          "latency_s": 1.475741707952693,
+          "text": "\u9664\u4e86\u5317\u4eac\u3001\u4e0a\u6d77\u3001\u5e7f\u5dde\u3001\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916\u3002",
+          "raw": {
+            "text": "\u9664\u4e86\u5317\u4eac\u3001\u4e0a\u6d77\u3001\u5e7f\u5dde\u3001\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_05",
+          "ref": "\u9664\u4e86\u5317\u4eac\u4e0a\u6d77\u5e7f\u5dde\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916",
+          "duration_s": 5.89,
+          "rtf": 0.25055037486463383
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8579765420872718,
+          "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+          "raw": {
+            "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_06",
+          "ref": "\u56db\u5341\u516d\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d",
+          "duration_s": 3.39,
+          "rtf": 0.25309042539447546
+        },
+        {
+          "ok": true,
+          "latency_s": 1.5078714170958847,
+          "text": "41\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d\u3002",
+          "raw": {
+            "text": "41\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_07",
+          "ref": "\u56db\u5341\u4e00\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d",
+          "duration_s": 6.14,
+          "rtf": 0.24558166402213108
+        },
+        {
+          "ok": true,
+          "latency_s": 1.2034894998650998,
+          "text": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u5019\u800c\u6765\u3002",
+          "raw": {
+            "text": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u5019\u800c\u6765\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_08",
+          "ref": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u540e\u800c\u6765",
+          "duration_s": 4.13,
+          "rtf": 0.29140181594796605
+        },
+        {
+          "ok": true,
+          "latency_s": 1.240067208185792,
+          "text": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b\u3002",
+          "raw": {
+            "text": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_09",
+          "ref": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b",
+          "duration_s": 4.41,
+          "rtf": 0.2811943782734222
+        },
+        {
+          "ok": true,
+          "latency_s": 1.9096913340035826,
+          "text": "\u653e\u677e\u4e86\u4e0e\u81ea\u7f51\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u653e\u677e\u4e86\u4e0e\u81ea\u7f51\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_10",
+          "ref": "\u653e\u677e\u4e86\u4e0e\u81ea\u5f80\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56",
+          "duration_s": 6.77,
+          "rtf": 0.28208143781441397
+        },
+        {
+          "ok": true,
+          "latency_s": 2.9400702498387545,
+          "text": "\u5176\u4e2d\uff0c\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead\u3002",
+          "raw": {
+            "text": "\u5176\u4e2d\uff0c\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_11",
+          "ref": "\u5176\u4e2d\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead",
+          "duration_s": 9.32,
+          "rtf": 0.3154581813131711
+        },
+        {
+          "ok": true,
+          "latency_s": 2.0796167091466486,
+          "text": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\uff0c\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f\u3002",
+          "raw": {
+            "text": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\uff0c\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_12",
+          "ref": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f",
+          "duration_s": 7.29,
+          "rtf": 0.2852697817759463
+        },
+        {
+          "ok": true,
+          "latency_s": 2.119284249842167,
+          "text": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_13",
+          "ref": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56",
+          "duration_s": 7.15,
+          "rtf": 0.296403391586317
+        },
+        {
+          "ok": true,
+          "latency_s": 1.9433642500080168,
+          "text": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a930\u65b0\u653f\u7b56\u7684\u63aa\u65bd\u3002",
+          "raw": {
+            "text": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a930\u65b0\u653f\u7b56\u7684\u63aa\u65bd\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_14",
+          "ref": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a\u4e5d\u4e09\u96f6\u65b0\u653f\u7b56\u7684\u63aa\u65bd",
+          "duration_s": 6.32,
+          "rtf": 0.30749434335569886
+        },
+        {
+          "ok": true,
+          "latency_s": 2.096509500173852,
+          "text": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56\u3002",
+          "raw": {
+            "text": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_15",
+          "ref": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56",
+          "duration_s": 7.25,
+          "rtf": 0.2891737241619106
+        },
+        {
+          "ok": true,
+          "latency_s": 1.707402667030692,
+          "text": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b\u3002",
+          "raw": {
+            "text": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_16",
+          "ref": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b",
+          "duration_s": 6.45,
+          "rtf": 0.2647135917877042
+        },
+        {
+          "ok": true,
+          "latency_s": 1.78037229180336,
+          "text": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u624b\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f\u3002",
+          "raw": {
+            "text": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u624b\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_17",
+          "ref": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u9996\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f",
+          "duration_s": 6.83,
+          "rtf": 0.2606694424309458
+        },
+        {
+          "ok": true,
+          "latency_s": 1.6028987078461796,
+          "text": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\uff0c\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0\u3002",
+          "raw": {
+            "text": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\uff0c\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_18",
+          "ref": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0",
+          "duration_s": 7.63,
+          "rtf": 0.2100784676076251
+        },
+        {
+          "ok": true,
+          "latency_s": 0.8510650410316885,
+          "text": "\u5176\u4e2d\uff0c\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005\u3002",
+          "raw": {
+            "text": "\u5176\u4e2d\uff0c\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_19",
+          "ref": "\u5176\u4e2d\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005",
+          "duration_s": 5.15,
+          "rtf": 0.16525534777314338
+        }
+      ]
+    },
+    {
+      "concurrency": 8,
+      "segments": 20,
+      "ok": 4,
+      "errors": 16,
+      "wall_s": 1.572305666981265,
+      "latency_ms_p50": 1446.1105829104781,
+      "latency_ms_p95": 1570.9176249802113,
+      "rtf_p50": 0.447888761811687,
+      "rtf_p95": 0.5604165050294972,
+      "error_rate_mean": 0.20606060606060606,
+      "error_samples": [
+        {
+          "detail": {
+            "error": "too_many_sessions",
+            "current": 4,
+            "limit": 4
+          }
+        },
+        {
+          "detail": {
+            "error": "too_many_sessions",
+            "current": 4,
+            "limit": 4
+          }
+        },
+        {
+          "detail": {
+            "error": "too_many_sessions",
+            "current": 4,
+            "limit": 4
+          }
+        }
+      ],
+      "results": [
+        {
+          "ok": false,
+          "latency_s": 0.3588888749945909,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_00",
+          "ref": "\u800c\u5bf9\u697c\u5e02\u6210\u4ea4\u6291\u5236\u4f5c\u7528\u6700\u5927\u7684\u9650\u8d2d",
+          "duration_s": 6.0
+        },
+        {
+          "ok": true,
+          "latency_s": 1.5709176249802113,
+          "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+          "raw": {
+            "text": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_01",
+          "ref": "\u4e5f\u6210\u4e3a\u5730\u65b9\u653f\u5e9c\u7684\u773c\u4e2d\u9489",
+          "duration_s": 3.87,
+          "rtf": 0.4059218669199512
+        },
+        {
+          "ok": false,
+          "latency_s": 0.3907887910027057,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_02",
+          "ref": "\u81ea\u516d\u6708\u5e95\u547c\u548c\u6d69\u7279\u5e02\u7387\u5148\u5ba3\u5e03\u53d6\u6d88\u9650\u8d2d\u540e",
+          "duration_s": 5.41
+        },
+        {
+          "ok": true,
+          "latency_s": 1.4198073749430478,
+          "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+          "raw": {
+            "text": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_03",
+          "ref": "\u5404\u5730\u653f\u5e9c\u4fbf\u7eb7\u7eb7\u8ddf\u8fdb",
+          "duration_s": 3.17,
+          "rtf": 0.447888761811687
+        },
+        {
+          "ok": true,
+          "latency_s": 1.4458745829761028,
+          "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+          "raw": {
+            "text": "\u8fd1\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_04",
+          "ref": "\u4ec5\u4e00\u4e2a\u591a\u6708\u7684\u65f6\u95f4\u91cc",
+          "duration_s": 2.58,
+          "rtf": 0.5604165050294972
+        },
+        {
+          "ok": false,
+          "latency_s": 0.3906577080488205,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_05",
+          "ref": "\u9664\u4e86\u5317\u4eac\u4e0a\u6d77\u5e7f\u5dde\u6df1\u5733\u56db\u4e2a\u4e00\u7ebf\u57ce\u5e02\u548c\u4e09\u4e9a\u4e4b\u5916",
+          "duration_s": 5.89
+        },
+        {
+          "ok": true,
+          "latency_s": 1.4461105829104781,
+          "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+          "raw": {
+            "text": "46\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d\u3002",
+            "language": "auto",
+            "backend": "sherpa_asr"
+          },
+          "id": "zh_pub_06",
+          "ref": "\u56db\u5341\u516d\u4e2a\u9650\u8d2d\u57ce\u5e02\u5f53\u4e2d",
+          "duration_s": 3.39,
+          "rtf": 0.4265812928939463
+        },
+        {
+          "ok": false,
+          "latency_s": 0.3568788750562817,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_07",
+          "ref": "\u56db\u5341\u4e00\u4e2a\u5df2\u6b63\u5f0f\u53d6\u6d88\u6216\u53d8\u76f8\u653e\u677e\u4e86\u9650\u8d2d",
+          "duration_s": 6.14
+        },
+        {
+          "ok": false,
+          "latency_s": 0.16386258299462497,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_08",
+          "ref": "\u8d22\u653f\u91d1\u878d\u653f\u7b56\u7d27\u968f\u5176\u540e\u800c\u6765",
+          "duration_s": 4.13
+        },
+        {
+          "ok": false,
+          "latency_s": 0.20816158317029476,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_09",
+          "ref": "\u663e\u793a\u51fa\u4e86\u6781\u5f3a\u7684\u5a01\u529b",
+          "duration_s": 4.41
+        },
+        {
+          "ok": false,
+          "latency_s": 0.3258566251024604,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_10",
+          "ref": "\u653e\u677e\u4e86\u4e0e\u81ea\u5f80\u9700\u6c42\u5bc6\u5207\u76f8\u5173\u7684\u623f\u8d37\u653f\u7b56",
+          "duration_s": 6.77
+        },
+        {
+          "ok": false,
+          "latency_s": 0.31750508304685354,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_11",
+          "ref": "\u5176\u4e2d\u5305\u62ec\u5bf9\u62e5\u6709\u4e00\u5957\u4f4f\u623f\u5e76\u5df2\u7ed3\u6e05\u76f8\u5e94\u8d2d\u623f\u8d37\u6b3e\u7684\u5bb6\u5ead",
+          "duration_s": 9.32
+        },
+        {
+          "ok": false,
+          "latency_s": 0.3136605001054704,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_12",
+          "ref": "\u4e3a\u6539\u5584\u5c45\u4f4f\u6761\u4ef6\u518d\u6b21\u7533\u8bf7\u8d37\u6b3e\u8d2d\u4e70\u666e\u901a\u5546\u54c1\u4f4f\u623f",
+          "duration_s": 7.29
+        },
+        {
+          "ok": false,
+          "latency_s": 0.274768624920398,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_13",
+          "ref": "\u94f6\u884c\u4e1a\u91d1\u878d\u673a\u6784\u6267\u884c\u9996\u5957\u623f\u8d37\u6b3e\u653f\u7b56",
+          "duration_s": 7.15
+        },
+        {
+          "ok": false,
+          "latency_s": 0.2111342081334442,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_14",
+          "ref": "\u8fd9\u4e2a\u540e\u6765\u88ab\u79f0\u4e3a\u4e5d\u4e09\u96f6\u65b0\u653f\u7b56\u7684\u63aa\u65bd",
+          "duration_s": 6.32
+        },
+        {
+          "ok": false,
+          "latency_s": 0.20975054195150733,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_15",
+          "ref": "\u88ab\u5e02\u573a\u516c\u8ba4\u4e3a\u662f\u4eca\u5e74\u5bf9\u697c\u5e02\u5f71\u54cd\u6700\u5927\u7684\u4e00\u4e2a\u653f\u7b56",
+          "duration_s": 7.25
+        },
+        {
+          "ok": false,
+          "latency_s": 0.24487699987366796,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_16",
+          "ref": "\u4ee5\u63d0\u9ad8\u4f4f\u623f\u516c\u79ef\u91d1\u7f34\u5b58\u804c\u5de5\u4f4f\u623f\u6d88\u8d39\u80fd\u529b",
+          "duration_s": 6.45
+        },
+        {
+          "ok": false,
+          "latency_s": 0.23905462492257357,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_17",
+          "ref": "\u652f\u6301\u7f34\u5b58\u804c\u5de5\u8d2d\u4e70\u9996\u5957\u548c\u6539\u5584\u578b\u81ea\u4f4f\u4f4f\u623f",
+          "duration_s": 6.83
+        },
+        {
+          "ok": false,
+          "latency_s": 0.2147128339856863,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_18",
+          "ref": "\u901a\u8fc7\u8d22\u653f\u8865\u8d34\u624b\u6bb5\u9f13\u52b1\u8d2d\u623f\u7684\u5730\u533a\u4e5f\u5728\u4e0d\u65ad\u589e\u52a0",
+          "duration_s": 7.63
+        },
+        {
+          "ok": false,
+          "latency_s": 0.3019959591329098,
+          "error": {
+            "detail": {
+              "error": "too_many_sessions",
+              "current": 4,
+              "limit": 4
+            }
+          },
+          "id": "zh_pub_19",
+          "ref": "\u5176\u4e2d\u591a\u9879\u653f\u7b56\u60e0\u53ca\u8d2d\u623f\u8005",
+          "duration_s": 5.15
+        }
+      ]
+    }
+  ]
+}
