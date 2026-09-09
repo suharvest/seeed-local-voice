@@ -83,113 +83,93 @@ Core0 81%, peak Core1 79% — both cores load-bearing, consistent with the
   latency cost per added session accelerates faster than the marginal
   throughput gain starting at c=12.
 
-## 2. Whisper (RKNN encoder + CPU KV-cache decoder) — hard-serialized by design
+## 2. Whisper (RKNN encoder + CPU KV-cache decoder)
 
-`rk.whisper` was confirmed present before this pass:
-`docker run --rm openvoicestream:rk-20260903.10 python3 -c "from voxedge.backends.whisper import WhisperASR; print(WhisperASR)"`
-→ `<class 'voxedge.backends.whisper.asr.WhisperASR'>` — the class exists in
-the image's installed `voxedge` package. The image's own `server/main.py`
-(built 2026-09-03) predates the `rk.whisper` / `hailo.whisper` /
-`jetson.whisper_trt` entries in `server/core/asr_backend.py`'s registry, so
-`server/core/asr_backend.py`, `server/core/voxedge_backend_config.py` and
-`server/core/model_downloader.py` (the three files that changed together to
-add Whisper registry/config/artifact support) were bind-mounted from this
-worktree's `main` over the image's copies — `main.py` itself was left
-untouched. The `asr_backend.py` diff against the image's baked-in copy is
-7 lines: three new `_ASR_REGISTRY` entries (`hailo.whisper`, `rk.whisper`,
-`jetson.whisper_trt`, all pointing at `voxedge.backends.whisper.WhisperASR`)
-and a branch that routes those three specs through
-`voxedge_backend_config.build_config_for_spec` — no behavior change to any
-existing backend path.
-
-**The backend admits exactly 1 concurrent session, unconditionally, by
-design** — not by admission-ceiling misconfiguration. Source, both in the
-image's installed `voxedge` and in `/home/cat/voxedge-whisper-src` (the
-current `voxedge` worktree on this device): `voxedge/backends/whisper/asr.py`
-hardcodes `concurrency_capability(..., max_concurrent=1, ...)` — there is no
-`WhisperASRConfig` field or env var that raises it. `WHISPER_MAX_CONCURRENT`
-only affects the *admission queue depth* the config builder requests; the
-backend's own capability call overrides it back to 1 regardless. This matches
-the `rk3576-whisper` profile's documented rationale: one encoder handle and
-one CPU ONNX KV-cache decoder, serialized on a single lock — the same
-decoder that, at the 20 s window this profile deliberately avoids, drove this
-exact device into a global OOM that killed an unrelated container (see the
-profile's own description in `configs/profiles/rk3576-whisper.json`).
+**History:** the previous pass on this section found `rk.whisper` admitting
+exactly 1 concurrent session regardless of `WHISPER_MAX_CONCURRENT` /
+`OVS_MAX_CONCURRENT_SESSIONS`, and attributed it to `voxedge/backends/whisper/asr.py`
+hardcoding `concurrency_capability(..., max_concurrent=1, ...)` with no config
+field to raise it (see the prior revision of this section for the full
+c=1/2/4/8/12 sweep against that build, including the accuracy caveat on
+`en_pub_00`). That has changed upstream: `voxedge` `main` (466f3e4
+`feat(asr): configurable admission ceilings for the whisper and sherpa
+backends`, merged, not yet released to PyPI as of `voxedge==0.0.13a0`) adds a
+real `max_concurrent` field to `WhisperASRConfig` plus a matching `_lock`.
+This run replaces the image's installed voxedge with a wheel built from that
+commit and re-runs the sweep.
 
 ### Setup
 
 | | |
 |---|---|
 | Backend | `rk.whisper` (`voxedge.backends.whisper.WhisperASR`), RKNN encoder + CPU ONNX KV-cache decoder |
-| Profile | `rk3576-whisper`, `WHISPER_VARIANT=base10`, `WHISPER_WINDOW_S=10`, `WHISPER_LANGUAGE=en` |
-| Model artifacts | `whisper_encoder_base_10s.rknn`, `decoder_model.onnx` + `decoder_with_past_model.onnx`, `mel_80_filters.txt`, `vocab_en.txt`/`vocab_zh.txt` — all pre-existing on-device under `/home/cat/whisper-bench/{model,onnx_dec}`, bind-mounted individually into the `WHISPER_MODEL_DIR` layout `model_downloader.py` expects |
-| Admission requested | `OVS_MAX_CONCURRENT_SESSIONS=16`, `WHISPER_MAX_CONCURRENT=16` — both clamped to the backend's hardcoded ceiling: `session_limiter: OVS_MAX_CONCURRENT_SESSIONS=16 exceeds backend ceiling (asr=1,tts=inf) → clamping to 1` |
-| Corpus | English subset of the same public corpus (LibriSpeech test-clean, `download_public_corpus.py`), filtered to the **76 items ≤ 9.5 s** — `WHISPER_WINDOW_S=10` hard-truncates any longer segment at the encoder, and the 24 items over 10 s in the full 100-item en set produced truncated, WER-inflated transcripts (a c=1 smoke test on the untruncated corpus showed 87.5% error on one >10 s item); filtering to fit-the-window segments isolates the concurrency effect from the truncation artifact |
-| Client | `bench/asr_bench/bench.py`, `--model whisper --lang en`, `ws://100.89.94.11:8622`, `--api-key ""` |
+| Image | `openvoicestream:rk-20260903.10` (cached on-device; no `rk-20260909` tag was present to try) |
+| `server/`+`configs/` | bind-mounted read-only from this worktree's `main` (bench harness only — no code change to `asr_backend.py`/`voxedge_backend_config.py`/`model_downloader.py` was needed this time, since main's copies already carry the `rk.whisper` registry entries from the prior pass) |
+| voxedge | PyPI `0.0.13a0` replaced with a wheel built from `voxedge` `main` 466f3e4 (`uv build --wheel` in a dedicated worktree), plus `sentencepiece`/`kaldi_native_fbank`, `pip install`ed into the running container then `docker restart` |
+| Profile | new `rk3576-whisper-c8` (copy of the tracked `rk3576-whisper` profile with `max_concurrent_sessions` raised from 1 to 8), `WHISPER_VARIANT=base10`, `WHISPER_WINDOW_S=10`, `WHISPER_LANGUAGE=en`, `OVS_MAX_CONCURRENT_SESSIONS=8`, `WHISPER_MAX_CONCURRENT=8` |
+| Model artifacts | the RK3576-correct `whisper_encoder_base_10s.rknn` (from `/home/cat/whisper-bench/model`) plus `decoder_model.onnx`/`decoder_with_past_model.onnx` (from `/home/cat/whisper-bench/onnx_dec`) and the shared vocab/mel files, assembled into the `encoder/rk/`, `decoder/base/` layout `model_downloader.py` expects under a bind mount — note `/home/cat/asrpar/whisper-model/encoder/rk/whisper_encoder_base_10s.rknn` (a different pre-existing path on this device) is actually an **RK3588** engine and fails `rknn_init` on this RK3576 board (`This rknn model is for RK3588, but current platform is RK3576`) — do not reuse that path for RK3576 |
+| Corpus | same LibriSpeech test-clean public corpus regenerated for the Jetson runs in this PR, filtered to items <= 9.5 s for the 10 s window: **138 items** (this corpus regeneration produced more short items than the 76 used in the prior pass's 100-item corpus; both filters use the same <=9.5s rule) |
+| Client | `bench/asr_bench/bench.py`, `--model whisper --lang en`, `ws://100.89.94.11:8622`, `--api-key testkey123` |
 
-Startup log:
+Startup log (confirmed fresh after every `docker restart` between levels
+below, not assumed from the first one):
 
 ```
-Applied profile rk3576-whisper from /opt/speech/configs/profiles/rk3576-whisper.json (4 env keys; 0 stale cleared)
-whisper.rknn: admission ceiling 16 requested but this voxedge build has no max_concurrent field on WhisperASRConfig — staying at 1 slots
-session_limiter: OVS_MAX_CONCURRENT_SESSIONS=16 exceeds backend ceiling (asr=1,tts=inf) → clamping to 1
-SessionLimiter initialized: effective_limit=1 (env OVS_MAX_CONCURRENT_SESSIONS='16', profile.max_concurrent_sessions=1)
+Applied profile rk3576-whisper-c8 from /opt/speech/configs/profiles/rk3576-whisper-c8.json (4 env keys; 0 stale cleared)
+SessionLimiter initialized: effective_limit=8 (env OVS_MAX_CONCURRENT_SESSIONS='8', profile.max_concurrent_sessions=8)
 whisper: rknn encoder @10.0s window, CPU KV decoder, lang=en
 ASR backend: whisper-rknn (capabilities: ['offline', 'streaming'])
-ASR executor: max_workers=1 (source=asr_cap.max_concurrent)
+ASR executor: max_workers=8 (source=asr_cap.max_concurrent)
 ```
 
-### Results (76 en segments ≤ 9.5 s per concurrency level)
+No `no max_concurrent field` warning and no `clamping to 1` line — the
+admission ceiling now follows the profile.
 
-| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | WER |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | 76 | 76 | 0 | 719.3 | 1048.9 | 0.159 | 0.274 | 0.166 | 6.22% |
-| 2 | 76 | 5 | 71 | 889.1 | 1066.4 | 0.167 | 0.288 | 0.166 | 22.07% (n=5) |
-| 4 | 76 | 2 | 74 | 911.4 | 1073.5 | 0.251 | 0.306 | 0.202 | 43.75% (n=2) |
-| 8 | 76 | 1 | 75 | 1059.4 | 1059.4 | 0.303 | 0.303 | 0.204 | 87.5% (n=1) |
-| 12 | 76 | 1 | 75 | 1059.4 | 1059.4 | 0.303 | 0.303 | 0.205 | 87.5% (n=1) |
+### Results (en segments <= 9.5 s per concurrency level, `--limit` = 8x concurrency)
 
-The WER figures at c≥2 are not concurrency-driven accuracy loss — they are
-computed over 1-5 lucky segments out of 76 (whichever connection won the
-single admission slot before the rest were rejected) and swing with which
-segments happened to get through, not with load. The only concurrency level
-with a real sample is c=1 (n=76, WER 6.22%). Errors at c≥2 are
-`too_many_sessions` at connect time, the same admission-rejection pattern as
-SenseVoice's original single-core baseline and harvest-pi's c=12/16 rows
-above.
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | Throughput (seg/s) | WER |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 8  | 8  | 0 | 835.9  | 1197.6 | 0.186 | 0.17 | 11.46% |
+| 2 | 16 | 16 | 0 | 774.1  | 1277.2 | 0.194 | 0.35 | 7.98%  |
+| 4 | 32 | 32 | 0 | 820.1  | 1478.4 | 0.211 | 0.63 | 6.44%  |
+| 8 | 64 | 64 | 0 | 1575.5 | 2754.5 | 0.380 | 1.09 | 6.28%  |
 
-**Accuracy caveat, separate from concurrency**: the single item that succeeded
-at c=8 and c=12 (`en_pub_00`, 3.5 s — well inside the 10 s window, so this is
-not the truncation effect described above) scored 87.5% WER with repeated
-text in the transcript. This is a per-item decode problem on this backend,
-not something the 9.5 s corpus filter explains or fixes; it is not evaluated
-further here since it is orthogonal to the concurrency question this pass
-measures.
+Zero errors through every level tested. WER at c=1 (11.46%, n=8) is close to
+the profile's documented ~11.37% short-segment figure; it settles to
+6.3-8.0% at c>=2 as the corpus subset (round-robined, more items) broadens
+— not a concurrency-driven accuracy change. p95 stays under the 1.5 s bar
+through c=4 (1478 ms), then rises to 2755 ms at c=8 (1.9x c=4's) — the
+serialized CPU ONNX KV-cache decoder queueing more sessions than it can
+service concurrently, the same mechanism documented in this profile's
+description (one encoder handle, one decoder lock) and in the Jetson Whisper
+sections of the companion `concurrency-orin-{nano,nx}-ceiling.md` reports in
+this PR. **Recommended admission ceiling: 4** — the highest level tested
+whose p95 stays under the 1.5 s bar; c=8 was the last level run per this
+board's dispatch spec (c=1/2/4/8) and already shows the ceiling passed, so no
+higher level was attempted.
 
 ### NPU occupancy
 
-`/sys/kernel/debug/rknpu/load`, 2 s samples spanning the full 5-level sweep
-(264 samples): 44 samples with Core0 active, peak Core0 **12%**, Core1 flat
-at 0% throughout. Whisper's RKNN encoder barely touches the NPU — the 10 s
-window is a small, quick encode; the CPU ONNX KV-cache decoder is the
-component doing the work, and it is invisible to this NPU counter.
+`/sys/kernel/debug/rknpu/load` sampled ad hoc during the c=8 run: `Core0: 11%,
+Core1: 0%` — consistent with the prior pass's finding that the RKNN encoder
+barely touches the NPU at this window size; the CPU ONNX KV-cache decoder is
+the actual bottleneck and is invisible to this counter. This was a single
+manual sample, not a continuous log across the whole sweep like the SenseVoice
+section above.
 
 ### Reading
 
-- The concurrency sweep does not change the finding: c=1 is the only usable
-  level on RK3576 Whisper, by construction. `WHISPER_MAX_CONCURRENT` and
-  `OVS_MAX_CONCURRENT_SESSIONS` are accepted but both get overridden back to
-  1 by the backend's own `concurrency_capability()` call — there is no
-  profile flag, env var, or session-limiter setting in this codebase version
-  that raises RK Whisper past 1 concurrent session.
-- At c=1, latency is comparable to SenseVoice's single-session numbers (p95
-  1048.9 ms vs SenseVoice's 1316.5 ms at c=4) and NPU load is far lower (peak
-  12% vs SenseVoice's 81%) — the ceiling here is architectural
-  (single-decoder-lock), not NPU compute.
-- Raising this ceiling is a code change (giving `WhisperASRConfig` a real
-  `max_concurrent` and either pooling decoder instances or accepting
-  serialized-but-queued admission like SenseVoice's stage-b queue), out of
-  scope for this bench-only task. The profile's own rationale — a global OOM
-  this device hit at the 20 s window — is reason to treat "how many decoder
-  instances actually fit in RAM" as a real open question before raising it,
-  not just an admission-limiter setting.
+- Raising `WhisperASRConfig.max_concurrent` (the voxedge `main` 466f3e4 fix)
+  turns RK3576 Whisper from a hard single-session admission clamp into the
+  same serialized-decode-queue pattern already seen on both Jetson boards in
+  this PR: concurrency above the decoder's real throughput becomes queueing
+  latency, not an admission rejection. c=8 error-free but past the 1.5 s
+  latency bar is a materially different (better) failure mode than the
+  previous `too_many_sessions` rejection wall at c>=2.
+- This confirms the previous section's "architectural, not admission-limiter"
+  framing was specific to the *installed package version*, not something
+  inherent to the RK3576 RKNN-encoder/CPU-decoder design — the same hardware
+  and model artifacts now sustain c=4 cleanly once the config field exists.
+- The per-item decode problem on `en_pub_00` noted in the prior pass was not
+  re-investigated here (out of scope for the concurrency question this pass
+  measures).

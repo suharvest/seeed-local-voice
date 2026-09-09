@@ -1,9 +1,12 @@
 # ASR concurrency ceiling — reComputer J3011 (Jetson Orin Nano 8GB Super)
 
 Zero errors through c=32 on SenseVoice, with p95 breaking down at c=48 — that is
-this board's ceiling for that backend. Whisper's admission ceiling is 1
-concurrent session, enforced by the installed `voxedge` package itself, not by
-board resources.
+this board's ceiling for that backend. Whisper's admission ceiling was
+previously 1 (the installed `voxedge==0.0.13a0` package had no
+`max_concurrent` field on `WhisperASRConfig`); with a wheel built from
+`voxedge` `main` (466f3e4, unreleased) the ceiling now follows the profile
+and the real bottleneck is a serialized decode queue — recommended ceiling 8,
+see the Whisper section below.
 
 ## SenseVoice (zh)
 
@@ -62,37 +65,63 @@ subset).
 
 ## Whisper (en)
 
-Corpus: 20 (c=1) / 200 (c=4) LibriSpeech test-clean en utterances (CC BY 4.0).
-Same transport/deployment recipe, profile `orin-whisper-c64` (copy of the
-tracked `orin-whisper` profile with `asr_max_slots`/`max_concurrent_sessions`
-raised from 8 to 64), `OVS_MAX_CONCURRENT_SESSIONS=64`.
+**History:** the PyPI package `voxedge==0.0.13a0` has no `max_concurrent`
+field on `WhisperASRConfig`, so every prior pass on this board clamped
+`effective_limit` to 1 regardless of the profile's requested ceiling (see
+`concurrency-orin-nano-clean.md` and the previous revision of this file).
+This run replaces PyPI voxedge with a wheel built from `voxedge` `main`
+(466f3e4 `feat(asr): configurable admission ceilings for the whisper and
+sherpa backends` — merged, not yet released to PyPI), which adds the field
+and a matching `_lock`. That removes the artificial clamp; the sweep below
+shows what actually gates Whisper concurrency once it is removed: a
+serialized decode queue, not board resources exhausted or an error.
 
-Server startup log: `whisper.tensorrt: admission ceiling 64 requested but
-this voxedge build has no max_concurrent field on WhisperASRConfig — staying
-at 1 slots`, then `session_limiter: OVS_MAX_CONCURRENT_SESSIONS=64 exceeds
-backend ceiling (asr=1,tts=inf) -> clamping to 1`, and
-`SessionLimiter initialized: effective_limit=1`. This is a property of the
-installed `voxedge==0.0.13a0` package (confirmed the sole and latest
-available pre-release via `pip index versions voxedge --pre`, which lists
-0.0.13a0 down to 0.0.1a0 with nothing newer) — not a profile setting we can
-raise, and not board resource exhaustion.
+Corpus: 200 LibriSpeech test-clean en utterances (CC BY 4.0), round-robined
+per level with `--limit` set so every level keeps segments >= 3x its worker
+count (e.g. c=24 uses 72). Same transport/deployment recipe as SenseVoice
+above: image `v0.9.0-ondemand-20260721c`, `server/`+`configs/` bind-mounted
+from openvoicestream `main`, profile `orin-whisper-c64` (`asr_max_slots`/
+`max_concurrent_sessions` raised from 8 to 64), `OVS_MAX_CONCURRENT_SESSIONS=64`,
+`OVS_API_KEYS=testkey123` (bench run with `--api-key`), `PYTHONUTF8=1`,
+`LC_ALL=C.UTF-8`. `pip install <voxedge-main-wheel> sentencepiece
+kaldi_native_fbank` replaces the image's stock voxedge inside the container.
+The Whisper base encoder `.plan` was already cached on this board from a
+prior pass (bf16 TensorRT, confirmed via file timestamp/size, not rebuilt
+this run). Server confirmed at startup: `SessionLimiter initialized:
+effective_limit=64` and `ASR executor: max_workers=64
+(source=asr_cap.max_concurrent)` — both survive a `docker restart` between
+every level in the sweep below (checked explicitly after each restart, not
+assumed from the first one). All non-ASR containers stopped before the run
+and restarted after, `docker ps` reconciled against the pre-test list.
 
-| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | Throughput (seg/s) | WER |
-|---|---|---|---|---|---|---|---|
-| 1 | 20  | 20 | 0   | 500.3 | 738.5 | 0.11 | 3.62% |
-| 4 | 200 | 5  | 195 | -     | -     | 0.16 | -     |
+| Concurrency | Segments | OK | Errors | p50 latency (ms) | p95 latency (ms) | RTF p50 | Throughput (seg/s) | WER |
+|---|---|---|---|---|---|---|---|---|
+| 1  | 20 | 20 | 0 | 595.3  | 1114.6 | 0.084 | 0.11 | 3.62%  |
+| 4  | 24 | 24 | 0 | 474.8  | 1119.7 | 0.072 | 0.42 | 4.41%  |
+| 8  | 40 | 40 | 0 | 680.7  | 1288.1 | 0.120 | 0.86 | 7.87%  |
+| 16 | 64 | 64 | 0 | 1819.3 | 3757.8 | 0.279 | 1.52 | 14.89% |
+| 24 | 72 | 72 | 0 | 4098.8 | 7008.6 | 0.708 | 1.82 | 25.92% |
 
-At c=1 all 20 segments transcribe correctly (WER 3.62%, matching the
-project's known Whisper-base reference figure). At c=4, only the first
-session is admitted; the other three are rejected at the WebSocket layer
-with `{"error": "too_many_sessions", "current": 1, "limit": 1}` — 195/200
-segments fail this way (the 5 that succeed are the sole admitted slot's
-share, processed sequentially as earlier callers finish and free the slot).
-**This board's real Whisper concurrency ceiling is 1** — c=8/16/24/32 were
-not run because the failure mode (a hard admission clamp, confirmed in the
-startup log) does not change with more attempted concurrency; running them
-would only reproduce the same near-total `too_many_sessions` rejection rate
-already shown at c=4, not new information about a resource limit.
+GR3D_FREQ peak 69%, RAM peak 3.03/7.62 GB (`orin-nano-ceiling-tegrastats.log`
+whole-sweep peaks, not per-level).
+
+Zero errors at every level tested (c=32 was not run — see below). p95 stays
+in a 1.1-1.3 s band through c=8, then more than doubles at c=16 (1.29 s ->
+3.76 s, 2.9x) and keeps climbing at c=24 (7.01 s) — the coordinator/executor
+serializes Whisper decode behind one CPU KV-cache path
+(`execution_policy.mode: concurrent` is declared but the backend still runs
+one decode at a time; see `voxedge/backends/whisper/asr.py`), so admission
+concurrency above the decode's real throughput turns into queueing, not
+parallel work. WER also rises with concurrency (3.62% at c=1 to 25.92% at
+c=24) — inspecting the c=24 per-segment transcripts shows genuine
+transcription failures under queueing pressure (truncated output, e.g. "Do
+you suppose the" for a full-sentence reference; hallucinated continuations
+unrelated to the reference), not merely slower-but-correct decoding, so this
+is an accuracy boundary as well as a latency one. **Recommended admission
+ceiling: 8** — the highest level tested whose p95 stays under the 1.5 s bar
+and whose WER (7.87%) has not yet diverged sharply from the c=1 baseline;
+c=32 was not run since c=16/c=24 already show the ceiling has been passed by
+a wide margin.
 
 ## Files
 
