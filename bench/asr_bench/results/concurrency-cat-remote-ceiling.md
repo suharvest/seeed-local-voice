@@ -157,6 +157,48 @@ the actual bottleneck and is invisible to this counter. This was a single
 manual sample, not a continuous log across the whole sweep like the SenseVoice
 section above.
 
+### Rerun with the fixed client, fixed 72-item subset at every level
+
+**History:** the table above used a growing per-level corpus (`--limit` =
+8x concurrency, 8/16/32/64 items), which is not per-item comparable across
+levels, and was collected before `bench.py` pinned `?vad=none` — under the
+withdrawn-elsewhere double-endpoint-detector defect (see
+`concurrency-orin-nano-ceiling.md`'s Whisper section for the mechanism), a
+growing corpus could mask per-item truncation as accuracy drift. This rerun
+uses the same fixed 72-item <=9.5s en subset as the J3011/J4012 reruns,
+reused unchanged at every level, plus the fixed client.
+
+Deployment unchanged (image `openvoicestream:rk-20260903.10`, profile
+`rk3576-whisper-c8`, `OVS_MAX_CONCURRENT_SESSIONS=8`/`WHISPER_MAX_CONCURRENT=8`,
+`server/`+`configs/` bind-mounted from this worktree's `main` at 438e0a4b,
+voxedge wheel from `main` 466f3e4, `--api-key testkey123`). Server confirmed
+`ASR executor: max_workers=8 (source=asr_cap.max_concurrent)`.
+
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | Throughput (seg/s) | WER (aggregate) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 72 | 72 | 0 | 775.6  | 1821.5 | 0.186 | 0.16 | 6.30% |
+| 2 | 72 | 72 | 0 | 809.3  | 1380.4 | 0.173 | 0.33 | 6.30% |
+| 4 | 72 | 72 | 0 | 880.3  | 1681.4 | 0.203 | 0.64 | 6.30% |
+| 8 | 72 | 72 | 0 | 1330.8 | 2702.8 | 0.297 | 1.15 | 6.30% |
+
+Zero errors at every level. WER is byte-identical (6.30% aggregate) at every
+level, and 0/72 transcripts differ from c=1 at c=2, c=4, or c=8; `pre_eos_finals`
+is 0 for every segment at every level. p95 is not monotonic with concurrency
+here: c=1 (1821.5 ms) is higher than c=2 (1380.4 ms) — the top outliers at
+c=1 run 1.7-3.1 s on a handful of the corpus's longer (up to 9.24 s) items,
+which this fixed-72-item subset includes and the withdrawn table's smaller
+per-level draws did not always reach. **Only c=2 clears the 1.5 s p95 bar
+on this corpus**; c=4 and c=8 exceed it (1681.4 ms, 2702.8 ms), and c=1's
+p95 is inflated by long-item outliers rather than by concurrency itself. This
+does not match the withdrawn table's "clean through c=4" reading and
+supersedes it.
+
+For the cross-device matched-100 comparison (same 100-item <=4.0 s en subset
+used for R2000's Hailo-8 pass and `whisper-hailo-wer-isolation.md`), a
+separate c=1 run against that subset: `results/rk3576-matched-r2000-100.json`,
+100/100 ok, 0 errors, aggregate WER **8.51%**, p50 654.8 ms, p95 1099.3 ms,
+`pre_eos_finals` 0/100.
+
 ### Reading
 
 - Raising `WhisperASRConfig.max_concurrent` (the voxedge `main` 466f3e4 fix)

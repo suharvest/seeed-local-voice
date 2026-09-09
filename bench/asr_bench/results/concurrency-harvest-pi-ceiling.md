@@ -5,13 +5,18 @@ beforehand were stopped for the whole sweep and restarted afterwards.
 
 Two separate limits. On latency (p95 ≤ 1.5 s), the largest level that clears
 the bar is **c=6 for SenseVoice** — c=8 measured 1265.2–3058.4 ms over four
-passes and c=12 measured 1565.5 ms, while c=6 measured 1172.6 ms. Whisper
-clears the latency bar at every level tested, c=8 included (1021.5–1085.6 ms).
-On completion, SenseVoice finishes 100/100 segments at every level up to c=12,
-the highest tested, while **Whisper's highest clean level is c=4**: at c=8 it
-rejects 22–30 of 100 against its 8-session admission ceiling. Recommended
-production concurrency: **6** for SenseVoice (the latency bar), **4** for
-Whisper (the rejection boundary).
+passes and c=12 measured 1565.5 ms, while c=6 measured 1172.6 ms.
+
+Whisper's original c=8 admission rejections and its per-level WER drift were
+both bench-client artifacts (the client raced the server's own VAD against
+its EOS frame — see "History (superseded below)" in the Whisper section) and
+do not reproduce after `bench.py` was fixed to pin `?vad=none`. Rerun with
+the fixed client and a `voxedge` build that gives `WHISPER_MAX_CONCURRENT` a
+real effect: zero errors and zero rejections through c=16, WER byte-identical
+(8.39%) at every level, 0/100 transcripts differing from c=1 at any level.
+Recommended production concurrency: **6** for SenseVoice (the latency bar),
+**16** for Whisper (highest level tested, p95 1465.3 ms, still under the
+1.5 s bar).
 
 ## Setup
 
@@ -153,6 +158,53 @@ WER is word-level on lowercased, unpunctuated text (`bench.py:84-118`). The
 per-segment mean runs about a point above the corpus aggregate: it weights
 every utterance equally, and one wrong word is a large fraction of a 3-second
 clip.
+
+**History (superseded below):** the table above and its per-level WER drift
+were collected with a bench client that opened `/asr/stream` with the server
+VAD left on while also sending the EOS frame; under load the client's own
+EOS raced the server's endpoint detector, and the client scored whichever
+`is_final` arrived first as the whole segment. `bench.py` now pins
+`?vad=none` and accumulates every final. The c=8 `too_many_sessions`
+rejections were a real admission-ceiling limit at the time (`voxedge==0.0.13a0`
+had no `max_concurrent` field, so `WHISPER_MAX_CONCURRENT` had no effect);
+that has since been fixed upstream (see below).
+
+### Rerun with the fixed client and a real admission ceiling
+
+Image/profile/artifacts unchanged (`asrbench-rpi5-hailo-whisper:r2000b`,
+profile `rpi5-hailo-whisper`, HEF + decoder cached on-device). voxedge
+`0.0.12a0` replaced with a wheel built from `voxedge` `main` 466f3e4 (the
+same commit as the J3011/J4012/RK3576/RK3588 reruns), `pip3 install --no-deps
+--force-reinstall` then `docker restart`; server confirmed at startup
+`ASR executor: max_workers=16 (source=asr_cap.max_concurrent)` —
+`OVS_MAX_CONCURRENT_SESSIONS=16` now actually takes effect instead of
+clamping to 1. `OVS_API_KEYS=testkey123`, bench run with `--api-key`.
+`mcp_face_rec` stopped for the run (holds `/dev/hailo0`) and restarted after.
+
+Corpus: the same 100-item en <=4.0 s subset as the table above (verified
+byte-identical ref/duration match against a fresh draw from the same
+HF-mirror parquet), the same 100 items reused at every concurrency level.
+
+| Concurrency | Segments | OK | Errors | p50 (ms) | p95 (ms) | RTF p50 | RTF p95 | Throughput (seg/s) | WER (aggregate) |
+|---|---|---|---|---|---|---|---|---|---|
+| 1  | 100 | 100 | 0 | 305.3 | 491.6  | 0.106 | 0.186 | 0.28 | 8.39% |
+| 2  | 100 | 100 | 0 | 314.1 | 520.8  | 0.109 | 0.198 | 0.55 | 8.39% |
+| 4  | 100 | 100 | 0 | 330.6 | 690.8  | 0.115 | 0.282 | 1.07 | 8.39% |
+| 8  | 100 | 100 | 0 | 340.1 | 870.4  | 0.118 | 0.362 | 2.06 | 8.39% |
+| 12 | 100 | 100 | 0 | 472.6 | 1300.0 | 0.168 | 0.431 | 2.62 | 8.39% |
+| 16 | 100 | 100 | 0 | 751.7 | 1465.3 | 0.261 | 0.547 | 3.60 | 8.39% |
+
+Zero errors and zero admission rejections through c=16 — the `too_many_sessions`
+failures in the withdrawn table above do not reproduce; the real
+`max_concurrent` field removes the clamp that made `WHISPER_MAX_CONCURRENT`
+a no-op. WER is byte-identical (8.39% aggregate) at every level, and every
+segment's transcript is identical to its c=1 text at every other level (0/100
+differ at c=2, c=4, c=8, c=12, c=16). `pre_eos_finals` is 0 for every segment
+at every level (the withdrawn table's 61/100 mid-feed cuts at c=1 do not
+reproduce with `?vad=none` pinned). **Recommended admission ceiling: 16** —
+the highest level tested, with p95 (1465.3 ms) still under the 1.5 s bar;
+c=16 was the top of this pass's requested range and was not shown to be this
+board's hardware ceiling, only the highest level that stayed clean.
 
 ## Reading
 
