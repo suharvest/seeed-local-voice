@@ -99,11 +99,17 @@ Zero errors at every level tested (c=24/32 were not run — see below). p95
 holds in a 0.69-1.06 s band through c=8, then jumps to 5.76 s at c=16 (5.4x
 c=8's) — the same serialized-CPU-KV-cache-decode queueing pattern as J3011;
 this board's larger GPU/CPU headroom does not move the onset meaningfully.
-WER also rises with concurrency (3.62% at c=1 to 16.07% at c=16), consistent
-with J3011's finding that queueing produces genuine transcription failures
-(truncation/hallucination) under load, not just added latency — not
-independently re-verified per-segment on this board, but the same mechanism
-(one CPU decode path serializing all sessions) applies to both.
+The aggregate WER also rises with concurrency (3.62% at c=1 to 16.07% at
+c=16), but as on J3011 this is a corpus-composition effect, not a confirmed
+concurrency effect: the items common to every level (the c=1 corpus is a
+prefix of every larger `--limit`) were not independently re-checked for
+per-item stability on this board, but J3011's matched-item check found
+byte-identical decode at every concurrency level for the items shared
+across all levels — the aggregate rise there was ordinary corpora growth
+pulling in harder items at higher `--limit`, not queueing corrupting
+decodes. The same mechanism (one CPU decode path serializing all sessions)
+applies to both boards, so the same caveat is assumed to hold here, though
+it was not independently verified on this board.
 **Recommended admission ceiling: 8** — the highest level tested whose p95
 stays under the 1.5 s bar; c=16 already shows a wide margin past the ceiling
 so c=24/c=32 were not run.

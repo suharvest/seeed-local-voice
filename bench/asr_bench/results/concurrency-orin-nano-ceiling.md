@@ -112,16 +112,24 @@ serializes Whisper decode behind one CPU KV-cache path
 (`execution_policy.mode: concurrent` is declared but the backend still runs
 one decode at a time; see `voxedge/backends/whisper/asr.py`), so admission
 concurrency above the decode's real throughput turns into queueing, not
-parallel work. WER also rises with concurrency (3.62% at c=1 to 25.92% at
-c=24) — inspecting the c=24 per-segment transcripts shows genuine
-transcription failures under queueing pressure (truncated output, e.g. "Do
-you suppose the" for a full-sentence reference; hallucinated continuations
-unrelated to the reference), not merely slower-but-correct decoding, so this
-is an accuracy boundary as well as a latency one. **Recommended admission
-ceiling: 8** — the highest level tested whose p95 stays under the 1.5 s bar
-and whose WER (7.87%) has not yet diverged sharply from the c=1 baseline;
-c=32 was not run since c=16/c=24 already show the ceiling has been passed by
-a wide margin.
+parallel work. The aggregate WER also rises with concurrency (3.62% at c=1
+to 25.92% at c=24), but this is **not** established as a concurrency effect:
+the 20 items common to every level (the c=1 corpus is a prefix of every
+larger `--limit`) score byte-identical `err` at every concurrency tested —
+decode is deterministic and unaffected by queueing for those items. The
+aggregate rise is a corpus-composition effect: higher `--limit` pulls in
+more, and on average harder, LibriSpeech items that were never tested at
+c=1. Separately, inspecting the c=24-only per-segment transcripts (items
+outside the matched set) does show real transcription failures — truncated
+output (e.g. "Do you suppose the" for a full-sentence reference) and
+hallucinated continuations unrelated to the reference — but since those
+specific items were not run at lower concurrency, this cannot be attributed
+to queueing rather than being simply harder audio; a same-item, varying-c
+comparison restricted to the full corpus would be needed to confirm or rule
+out an accuracy effect from queueing. **Recommended admission ceiling: 8**
+— the highest level tested whose p95 stays under the 1.5 s bar; c=32 was not
+run since c=16/c=24 already show the latency ceiling passed by a wide
+margin.
 
 ## Files
 
