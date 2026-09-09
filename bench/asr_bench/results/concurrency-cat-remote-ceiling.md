@@ -146,7 +146,9 @@ sections of the companion `concurrency-orin-{nano,nx}-ceiling.md` reports in
 this PR. **Recommended admission ceiling: 4** — the highest level tested
 whose p95 stays under the 1.5 s bar; c=8 was the last level run per this
 board's dispatch spec (c=1/2/4/8) and already shows the ceiling passed, so no
-higher level was attempted.
+higher level was attempted. This table was collected before `bench.py`
+pinned `?vad=none`; the "Rerun with the fixed client" subsection below
+reruns this sweep and revises the recommendation to **2**.
 
 ### NPU occupancy
 
