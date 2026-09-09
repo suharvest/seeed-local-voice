@@ -45,16 +45,27 @@ exact same 100 segments R2000 used.
 |---|---|---|---|---|---|
 | `concurrency-harvest-pi-ceiling.md` | R2000 (Hailo-8) | 100 LibriSpeech &le;4.0 s | 100 | **23.00%** | 24.43% |
 | this pass | J4012 (Orin NX, bf16) | **same 100 segments** | 100 | **19.06%** | 21.49% |
-| `concurrency-orin-nx-ceiling.md` (for reference, different corpus) | J4012 (Orin NX, bf16) | 20 LibriSpeech, unfiltered duration | 20 | 3.62% | 3.62% |
+| `concurrency-orin-nx-ceiling.md` (for reference, different corpus) | J4012 (Orin NX, bf16) | 20 LibriSpeech, unfiltered duration | 20 | 3.40%\* | 3.62% |
+
+\* `concurrency-orin-nx-ceiling.md` reports 3.62% for this row, which is the
+per-segment mean (`error_rate_mean` in its JSON), not the aggregate. This
+report's own aggregate/mean pair for the 100-item corpus (19.06%/21.49%) uses
+the same `jiwer.wer` aggregate definition as the 23.00%/24.43% R2000 pair, so
+comparing aggregate-to-aggregate requires recomputing the 20-item corpus's
+aggregate from its stored ref/hyp pairs: 15 edits / 441 reference words =
+**3.40%** (see EVIDENCE).
 
 On the identical 100-segment corpus, J4012 bf16 scores 19.06% aggregate WER
-against R2000 Hailo's 23.00% — a **3.94-point gap**. The originally-compared
-figures (23.00% vs 3.62%) differ by 19.38 points; of that, **15.44 points is
-the corpus** (J4012's own WER goes from 3.62% on the easy 20-item draw to
-19.06% on this harder 100-item &le;4.0 s draw) and **3.94 points is the
-Hailo-8/HEF path** (same corpus, same normalization, only the accelerator and
-encoder artifact differ). The corpus effect is roughly 4x the accelerator
-effect.
+against R2000 Hailo's 23.00% — a **3.94-point difference between the two
+tested backend configurations** (same corpus, same normalization; see
+"What this does and does not isolate" below for what that difference can and
+cannot be attributed to). Comparing aggregate to aggregate throughout: the
+originally-compared figures (23.00% vs 3.40%) differ by **19.60 points**; of
+that, **15.66 points is associated with the corpus** (J4012's own aggregate
+WER goes from 3.40% on the easy 20-item draw to 19.06% on this harder
+100-item &le;4.0 s draw) and **3.94 points is the same-corpus difference
+between the R2000/Hailo-8 and J4012/bf16 configurations**. The
+corpus-associated share is about 4x the same-corpus share.
 
 Both devices show heavy server-side endpointing on this short-clip corpus:
 72/100 J4012 segments and 61/100 R2000 segments produced at least one
@@ -78,14 +89,40 @@ backends.
 | `en_pub_221` | DURING HIS WATCH I SLEPT | &gt;&gt; I slept. (0.6) | During his watch, I I slept. (0.2) |
 | `en_pub_28` | NOW WHAT HAVE YOU TO SAY CYNTHIA SPRAGUE | Now what have you to say, sent this brawg? | Now what have you to say, Cynthia Sprague? (0.0) |
 
-9 of these 10 rows favor J4012; on 8 of them R2000's Hailo transcript
-substitutes an unrelated word or phrase for a proper noun or content word
-(POYSER -> "Placer"/"missy", KAFFAR'S -> "calf", CYNTHIA SPRAGUE -> "sent
-this brawg", REMARKED -> "remained... smart") rather than a plausible
-near-miss, which is the pattern behind the 3.94-point same-corpus gap. One
-row (`en_pub_324`) goes the other way — J4012 appended an unprompted
-"Thank you." not in the audio, the same class of decoder hallucination noted
-for the CPU KV-cache decoder elsewhere in this results/ directory.
+8 of these 10 rows favor J4012, 1 favors R2000 (`en_pub_66`: 0.2 vs 0.6),
+and 1 is near-even in the other direction (`en_pub_324`: 0.0 vs 1.0, J4012
+appending an unprompted "Thank you." not in the audio — the same class of
+decoder hallucination noted for the CPU KV-cache decoder elsewhere in this
+results/ directory). On 7 of the 8 rows that favor J4012, R2000's Hailo
+transcript substitutes an unrelated word or phrase for a proper noun or
+content word (POYSER -> "Placer"/"missy", KAFFAR'S -> "calf", CYNTHIA
+SPRAGUE -> "sent this brawg", REMARKED -> "remained... smart") rather than a
+plausible near-miss.
+
+### What this does and does not isolate
+
+The 3.94-point same-corpus difference is the observed gap between the two
+tested backend configurations (R2000: Hailo-8 encoder, 5 s window, CPU KV
+decoder; J4012: TensorRT bf16 encoder, 30 s window, CPU KV decoder) — it is
+not proven to isolate encoder transcription quality specifically. Two
+confounds were not ruled out in this pass:
+
+- **Window size differs (5 s vs 30 s).** Every matched segment is &le;4.0 s,
+  well under both windows' usable length, so no segment is truncated or
+  split by either window — but that only rules out truncation, not other
+  effects the encoder's compiled window length could have on how it
+  processes a short, heavily-padded clip.
+- **Endpointing differs in count.** 72/100 J4012 segments and 61/100 R2000
+  segments produced at least one `is_final` before end-of-audio
+  (`pre_eos_finals` > 0) — a real difference in how often each configuration
+  cuts mid-feed. `bench.py` records that this happened per segment but not
+  where in the audio the cut landed, so whether the extra J4012 cuts
+  concentrate on segments that also happen to score well, or are otherwise
+  neutral to WER, was not checked.
+
+Report the 3.94 points as an observed difference between the tested
+end-to-end configurations, with the encoder-vs-window-vs-endpointer
+attribution unresolved.
 
 ## Hailo HEF provenance and quantization
 
@@ -96,44 +133,56 @@ for the CPU KV-cache decoder elsewhere in this results/ directory.
 `hailo`/`rknn`/`tensorrt`). That repo's own README
 (`https://hf-mirror.com/harvestsu/whisper-edge/resolve/main/README.md`)
 states under Provenance: **"The Hailo HEFs come from Hailo's own
-`edge_whisper` example assets"** — i.e. this HEF is not a custom quantization
-built for this project; it is Hailo's own stock precompiled release asset,
-carried through unmodified. The README does not state the HEF's internal
-numeric precision (int8/int4/mixed), and no calibration or quantization log
-for it exists in this repo or the HF repo to confirm the exact scheme — that
-detail is **not verified** here. What is documented and confirmed
-independently: Hailo-8 is a fixed-point NPU (its Dataflow Compiler targets
-INT8/INT4 execution; it has no native fp16/bf16 execution path the way
-Jetson's TensorRT does), so *some* fixed-point quantization is inherent to
-running on this hardware at all — but the precise per-layer scheme for this
-specific HEF was not independently verified in this pass.
+`edge_whisper` example assets"**. That is the extent of what the README
+documents — it identifies a source, not a specific upstream release or a
+hash to confirm the file in this repo matches that source byte-for-byte, so
+this pass does not claim the HEF was "carried through unmodified," only that
+it is attributed to Hailo's own example assets rather than a custom
+quantization built for this project. The README does not state the HEF's
+internal numeric precision (int8/int4/mixed), and no calibration or
+quantization log for it exists in this repo or the HF repo to confirm the
+exact scheme — that detail is **not verified** here. What is documented and
+confirmed independently: Hailo-8 is a fixed-point NPU (its Dataflow Compiler
+targets INT8/INT4 execution; it has no native fp16/bf16 execution path the
+way Jetson's TensorRT does), so *some* fixed-point quantization is inherent
+to running on this hardware at all — but the precise per-layer scheme for
+this specific HEF was not independently verified in this pass.
 
 `server/core/model_downloader.py:917-921` (`_WHISPER_GEOMETRY`) compiles the
 base HEF at a fixed **5.0 s window with a 1.0 s boundary guard** (4 s
 usable). Every one of the 100 matched segments is &le;4.0 s
 (`concurrency-harvest-pi-ceiling.md`'s own corpus filter), so none of them
-should be truncated or split by the window — the window itself is not a
-factor in this comparison's WER gap; the encoder's per-sample transcription
-quality is.
+are truncated or split by the window — that rules out truncation as a
+factor, not the window-size confound described above.
 
 ## Conclusion
 
-On the identical 100-segment, &le;4.0 s corpus: corpus difficulty accounts for
-**15.44 of the 19.38-point** originally-compared gap (23.00% R2000 vs 3.62%
-J4012 on different corpora); the Hailo-8/HEF path itself accounts for the
-remaining **3.94 points** (23.00% vs 19.06%, same corpus, same
-normalization). Both are real effects; the corpus effect is the larger one.
+On the identical 100-segment, &le;4.0 s corpus, comparing aggregate WER to
+aggregate WER throughout: corpus difficulty accounts for **15.66 of the
+19.60-point** originally-compared gap (23.00% R2000 vs 3.40% J4012 on
+different corpora); the remaining **3.94 points** is the observed
+same-corpus difference between the R2000/Hailo-8 and J4012/bf16
+configurations (23.00% vs 19.06%, same corpus, same normalization) — a real
+effect whose mechanism (encoder, window, or endpointer) is not isolated by
+this pass. The corpus-associated share is about 4x the same-corpus share.
 
 ## EVIDENCE
 
 ### Subset file-list consistency (100/100 matched)
 
 ```
-$ python3 -c "... verify id/transcript/duration against a fresh --limit 400 draw ..."
+$ cd bench/asr_bench/corpus && python3 verify_r2000_match.py
+target count 100
 matched 100 mismatches 0
 ```
-Total duration of the matched 100: 296.43 s (R2000's own report: 296.4 s of
-audio) — exact match.
+`verify_r2000_match.py` (committed alongside this report) checks
+transcript (case-insensitive) and duration (&plusmn;0.05 s) for each of the
+100 R2000 ids against `en_manifest_400.json`, the freshly regenerated
+LibriSpeech draw — a metadata match, not a PCM/audio-hash match; the
+underlying `.wav` files (and `en_manifest_400.json`) are not committed
+(LibriSpeech audio, not repo-tracked elsewhere either). Total duration of
+the matched 100: 296.43 s (R2000's own report: 296.4 s of audio) — matches
+to the reported precision.
 
 ### J4012 container startup log (bf16 confirmation)
 
@@ -170,8 +219,36 @@ device) before the log above.
 ```
 Aggregate WER computed the same way as the rest of this directory
 (`jiwer.wer` over the full ref/hyp lists, not the mean of per-item err):
-**0.19060 (19.06%)**. Full per-item results:
+**0.19060 (19.06%)**, verified against `error_rate_mean=0.21486` (mean of
+per-item err) independently by recomputing edit distances over all 100
+stored (ref, hyp) pairs — both figures reproduce from
 `results/j4012-matched-r2000-100.json`.
+
+### Aggregate WER for the 20-item J4012 reference row
+
+`concurrency-orin-nx-ceiling.md`'s Whisper c=1 row reports 3.62%, which is
+`error_rate_mean` (per-segment mean) in its own JSON
+(`concurrency-orin-nx-ceiling.json`, `whisper_en.runs[c=1].results`), not the
+aggregate used everywhere else in this report:
+
+```
+$ python3 -c "
+import json, jiwer
+d = json.load(open('concurrency-orin-nx-ceiling.json'))
+res = [r for r in d['whisper_en']['runs'] if r['concurrency']==1][0]['results']
+refs = [r['ref'] for r in res]; hyps = [r['text'] for r in res]
+tr = jiwer.Compose([jiwer.ToLowerCase(), jiwer.RemovePunctuation(),
+                     jiwer.RemoveMultipleSpaces(), jiwer.Strip(),
+                     jiwer.ReduceToListOfListOfWords()])
+print(jiwer.wer(refs, hyps, reference_transform=tr, hypothesis_transform=tr))
+print(sum(r['err'] for r in res)/len(res))
+"
+0.034013605442176874
+0.03620410839271684
+```
+Aggregate 3.40% (15 edits / 441 reference words), mean 3.62% — the mean
+matches the reported figure exactly; the aggregate is the number used for
+every comparison in this report's Result/Conclusion sections.
 
 ### 10-item comparison table
 
